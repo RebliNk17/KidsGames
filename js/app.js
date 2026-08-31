@@ -17,6 +17,7 @@ const App = (() => {
     v: 2,
     soundOn: true,
     speechOn: true,
+    fullscreenOn: false,
     math: GAME_SLICE(),
     letters: GAME_SLICE()
   });
@@ -34,6 +35,7 @@ const App = (() => {
         v: 2,
         soundOn: raw.soundOn !== false,
         speechOn: raw.speechOn !== false,
+        fullscreenOn: false,
         math: {
           maxLevel: raw.maxLevel || 1,
           stars: raw.stars || 0,
@@ -83,10 +85,85 @@ const App = (() => {
   function openGame(engine) {
     Sounds.ensure();
     Sounds.click();
+    // הלחיצה על הכרטיס היא מחוות משתמש - מותר לבקש כאן מסך מלא
+    if (state.fullscreenOn && fsSupported() && !fsElement()) enterFullscreen();
     activeEngine = engine;
     $('mascot').textContent = engine.key === 'letters' ? '🦉' : '🦊';
     show('screen-game');
     engine.open();
+  }
+
+  /* ─── מסך מלא (עם קידומות webkit/moz/ms לאנדרואיד ודפדפנים ישנים) ─── */
+
+  function fsElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement ||
+      document.mozFullScreenElement || document.msFullscreenElement || null;
+  }
+
+  function fsSupported() {
+    const d = document.documentElement;
+    return !!(d.requestFullscreen || d.webkitRequestFullscreen ||
+      d.mozRequestFullScreen || d.msRequestFullscreen);
+  }
+
+  function enterFullscreen() {
+    const d = document.documentElement;
+    const fn = d.requestFullscreen || d.webkitRequestFullscreen ||
+      d.mozRequestFullScreen || d.msRequestFullscreen;
+    if (!fn) return;
+    try {
+      const p = fn.call(d);
+      if (p && p.catch) p.catch(() => { });
+    } catch (e) { }
+    // נעילת המסך לאורך - עובדת רק בתוך מסך מלא, ולא בכל הדפדפנים
+    try {
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('portrait').catch(() => { });
+      }
+    } catch (e) { }
+  }
+
+  function exitFullscreen() {
+    const fn = document.exitFullscreen || document.webkitExitFullscreen ||
+      document.webkitCancelFullScreen || document.mozCancelFullScreen ||
+      document.msExitFullscreen;
+    if (!fn) return;
+    try {
+      const p = fn.call(document);
+      if (p && p.catch) p.catch(() => { });
+    } catch (e) { }
+  }
+
+  function setupFullscreen() {
+    const btn = $('btn-fullscreen');
+    if (!fsSupported()) return; // הכפתור נשאר מוסתר (למשל באייפון)
+    btn.classList.remove('hidden');
+
+    const sync = () => {
+      const on = !!fsElement();
+      $('fs-icon-expand').classList.toggle('hidden', on);
+      $('fs-icon-compress').classList.toggle('hidden', !on);
+    };
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange']
+      .forEach(ev => document.addEventListener(ev, sync));
+
+    btn.addEventListener('click', () => {
+      Sounds.click();
+      if (fsElement()) {
+        state.fullscreenOn = false;
+        exitFullscreen();
+      } else {
+        state.fullscreenOn = true;
+        enterFullscreen();
+      }
+      save();
+    });
+
+    // מצב דביק: אם הילד יצא בטעות (מחוות "אחורה" באנדרואיד יוצאת ממסך מלא),
+    // הנגיעה הבאה במסך מחזירה אותו. כיבוי אמיתי - דרך הכפתור.
+    document.addEventListener('pointerdown', () => {
+      if (state.fullscreenOn && !fsElement()) enterFullscreen();
+    });
   }
 
   /* ─── מסך הבית ─── */
@@ -302,6 +379,7 @@ const App = (() => {
     setupParentGate();
     setupSettings();
     setupInstall();
+    setupFullscreen();
     registerSW();
     MathGame.init();
 

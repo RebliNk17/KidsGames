@@ -194,6 +194,7 @@ button {
 
 .btn-gear {
   position: absolute;
+  top: 10px;
   top: max(10px, env(safe-area-inset-top));
   left: 12px;
   font-size: 25px;
@@ -215,6 +216,25 @@ button {
   transform-origin: bottom;
   border-radius: 50%;
 }
+
+/* כפתור מסך מלא - למכשירים שאי אפשר להתקין בהם כאפליקציה */
+.btn-fs {
+  position: absolute;
+  top: 10px;
+  top: max(10px, env(safe-area-inset-top));
+  right: 12px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #ffffff9c;
+  color: #5b3fa8;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 3px 8px rgba(60, 30, 120, 0.25);
+  transition: transform 0.1s;
+}
+
+.btn-fs:active { transform: scale(0.9); }
 
 .btn-gear.holding .gear-fill { transform: scaleY(1); transition: transform 1.5s linear; }
 
