@@ -1,0 +1,33 @@
+{
+  "name": "משחקים ולומדים - חשבון לילדים",
+  "short_name": "משחקים ולומדים",
+  "description": "משחקי חשבון מהנים לילדים: סופרים, מחברים ומחסרים עם צלילים, אנימציות והסברים קוליים",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#7c4dff",
+  "background_color": "#b388ff",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

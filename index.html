@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>משחקים ולומדים 🎈</title>
+  <meta name="description" content="משחקי חשבון מהנים לילדים - לומדים לספור, לחבר ולחסר עם צלילים והסברים קוליים">
+  <meta name="theme-color" content="#7c4dff">
+
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="./icons/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="משחקים ולומדים">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Varela+Round&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+
+  <!-- רקע מונפש -->
+  <div id="bg-bubbles" aria-hidden="true"></div>
+
+  <!-- ══════════ מסך הבית ══════════ -->
+  <main id="screen-home" class="screen">
+    <header class="home-header">
+      <h1 class="home-title"><span class="wiggle">🎈</span> משחקים ולומדים <span class="wiggle d2">🎈</span></h1>
+      <p class="home-sub">משחקים, צוברים כוכבים ולומדים דברים חדשים!</p>
+    </header>
+
+    <section class="shelf" aria-label="המדבקות שאספתי">
+      <div class="shelf-title">🏆 המדבקות שלי</div>
+      <div id="sticker-row" class="sticker-row"></div>
+      <div id="total-stars" class="total-stars"></div>
+    </section>
+
+    <section class="cards">
+      <button id="card-math" class="game-card math">
+        <span class="card-icon">🧮</span>
+        <span class="card-name">משחק החשבון</span>
+        <span class="card-info" id="math-card-info">רמה 1</span>
+        <span class="card-go">▶ בוא נשחק!</span>
+      </button>
+
+      <button id="card-words" class="game-card words locked">
+        <span class="card-icon">🔤</span>
+        <span class="card-name">אותיות ומילים</span>
+        <span class="card-info">🔒 בקרוב!</span>
+      </button>
+    </section>
+
+    <button id="btn-install" class="btn-install hidden">📲 התקן כאפליקציה</button>
+
+    <button id="btn-settings" class="btn-gear" title="להורים - לחיצה ארוכה">
+      <span class="gear-fill"></span>⚙️
+    </button>
+  </main>
+
+  <!-- ══════════ מסך המשחק ══════════ -->
+  <main id="screen-game" class="screen hidden">
+    <header class="game-top">
+      <button id="btn-back" class="btn-round" title="חזרה">🏠</button>
+      <div id="level-badge" class="level-badge">רמה 1</div>
+      <div id="star-meter" class="star-meter" aria-label="התקדמות"></div>
+      <button id="btn-help" class="btn-round" title="הסבר על התרגיל">❓</button>
+      <button id="btn-say" class="btn-round" title="הקראת השאלה">🔊</button>
+    </header>
+
+    <section id="question-area" class="question-area">
+      <div id="q-prompt" class="q-prompt"></div>
+      <div id="q-visual" class="q-visual"></div>
+      <div id="q-expr" class="q-expr ltr"></div>
+    </section>
+
+    <section id="options-wrap" class="options-wrap">
+      <div id="options" class="options"></div>
+      <div id="think-lock" class="think-lock hidden">
+        <svg class="think-ring" viewBox="0 0 100 100">
+          <circle class="ring-bg" cx="50" cy="50" r="44"></circle>
+          <circle id="ring-fg" class="ring-fg" cx="50" cy="50" r="44"></circle>
+        </svg>
+        <span class="think-face">🤔</span>
+        <span class="think-text">רגע חושבים...</span>
+      </div>
+    </section>
+
+    <div id="mascot" class="mascot">🦊</div>
+    <div id="toast" class="toast hidden"></div>
+  </main>
+
+  <!-- ══════════ חלון הסבר / רמה חדשה ══════════ -->
+  <div id="overlay-explain" class="overlay hidden">
+    <div class="modal explain-modal">
+      <div id="explain-banner" class="explain-banner hidden">🎉 רמה חדשה! 🎉</div>
+      <div id="explain-icon" class="explain-icon">🐣</div>
+      <h2 id="explain-name" class="explain-name"></h2>
+      <div id="explain-demo" class="explain-demo"></div>
+      <p id="explain-text" class="explain-text"></p>
+      <div class="explain-buttons">
+        <button id="btn-explain-replay" class="btn big alt">🔊 שמע שוב</button>
+        <button id="btn-explain-start" class="btn big go">▶ מתחילים!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ הגדרות (להורים) ══════════ -->
+  <div id="overlay-settings" class="overlay hidden">
+    <div class="modal settings-modal">
+      <h2>⚙️ אזור הורים</h2>
+      <div class="set-row">
+        <span>🔔 צלילים</span>
+        <button id="set-sound" class="btn toggle">פועל</button>
+      </div>
+      <div class="set-row">
+        <span>🗣️ דיבור והסברים</span>
+        <button id="set-speech" class="btn toggle">פועל</button>
+      </div>
+      <div class="set-row">
+        <span>🎙️ בדיקת קול</span>
+        <button id="set-test-voice" class="btn">שמע דוגמה</button>
+      </div>
+      <div class="set-row">
+        <span>🪜 רמה נוכחית</span>
+        <div class="level-adjust">
+          <button id="set-lvl-down" class="btn small">−</button>
+          <span id="set-lvl-val">1</span>
+          <button id="set-lvl-up" class="btn small">+</button>
+        </div>
+      </div>
+      <div class="set-row stats" id="set-stats"></div>
+      <div class="set-row">
+        <button id="set-reset" class="btn danger">🗑️ איפוס כל ההתקדמות</button>
+      </div>
+      <p class="set-hint">💡 להתקנה כאפליקציה באנדרואיד: תפריט הדפדפן ← "הוספה למסך הבית".<br>באייפון: כפתור שיתוף ← "הוסף למסך הבית".</p>
+      <button id="set-close" class="btn big go">סגור</button>
+    </div>
+  </div>
+
+  <!-- ══════════ אישור איפוס ══════════ -->
+  <div id="overlay-confirm" class="overlay hidden">
+    <div class="modal confirm-modal">
+      <h2>🗑️ לאפס הכול?</h2>
+      <p>כל הכוכבים והרמות יימחקו ונתחיל מההתחלה.</p>
+      <div class="explain-buttons">
+        <button id="confirm-no" class="btn big alt">ביטול</button>
+        <button id="confirm-yes" class="btn big danger">כן, לאפס</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./js/sounds.js"></script>
+  <script src="./js/speech.js"></script>
+  <script src="./js/confetti.js"></script>
+  <script src="./js/levels.js"></script>
+  <script src="./js/game.js"></script>
+  <script src="./js/app.js"></script>
+</body>
+</html>
