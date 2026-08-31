@@ -817,6 +817,175 @@ button {
   filter: drop-shadow(0 2px 3px rgba(60,30,120,0.4));
 }
 
+/* ═══════════════════ משחק האותיות ═══════════════════ */
+
+/* לניקוד נחוץ גופן שמצייר אותו במקום הנכון */
+.nikud { font-family: Arial, 'Noto Sans Hebrew', 'Varela Round', sans-serif; }
+
+.opt.letter-opt { font-size: clamp(34px, 9vw, 48px); padding: 14px 6px; direction: rtl; }
+.opt.emoji-opt  { font-size: clamp(38px, 10vw, 54px); padding: 14px 6px; }
+.opt.word-opt   { font-size: clamp(26px, 7vw, 34px); padding: 13px 10px; direction: rtl; }
+
+.vis-emoji { font-size: clamp(64px, 18vw, 96px); line-height: 1.1; }
+
+.vis-glyph {
+  font-size: clamp(70px, 20vw, 110px);
+  font-weight: bold;
+  color: #5b3fa8;
+  line-height: 1.1;
+  text-shadow: 0 3px 0 #d9ccf7;
+}
+
+.pop-in { animation: objPop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) backwards; }
+
+/* כרטיס מילה מנוקדת */
+.word-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.word-big {
+  display: flex;
+  direction: rtl;
+  gap: 3px;
+  font-size: clamp(40px, 12vw, 62px);
+  font-weight: bold;
+  color: #3b2b63;
+  line-height: 1.5;
+}
+
+.word-big .unit { animation: objPop 0.4s ease backwards; }
+.word-big .unit:nth-child(2) { animation-delay: 90ms; }
+.word-big .unit:nth-child(3) { animation-delay: 180ms; }
+.word-big .unit:nth-child(4) { animation-delay: 270ms; }
+
+.unit-blank {
+  min-width: 1em;
+  background: #ffe9a8;
+  border: 3px dashed #ffb03a;
+  border-radius: 12px;
+  animation: pulseSoft 1.4s ease-in-out infinite !important;
+}
+
+.unit-revealed {
+  min-width: 1em;
+  background: #c8f7c5;
+  border: 3px solid #34c759;
+  border-radius: 12px;
+  color: #1d7a33;
+  animation: starFill 0.6s ease !important;
+}
+
+.unit-hl {
+  background: #ffe9a8;
+  border-radius: 12px;
+  box-shadow: 0 0 0 3px #ffb03a;
+}
+
+.word-side-emoji { font-size: clamp(40px, 11vw, 60px); }
+
+/* בניית מילים: משבצות ואריחים */
+.build-slots {
+  display: flex;
+  direction: rtl;
+  justify-content: center;
+  gap: 8px;
+  font-size: clamp(36px, 10vw, 52px);
+  font-weight: bold;
+}
+
+.slot {
+  min-width: 1.25em;
+  min-height: 1.5em;
+  background: #f3edff;
+  border: 3px dashed #b9a4f2;
+  border-radius: 14px;
+  color: #3b2b63;
+  display: grid;
+  place-items: center;
+  line-height: 1.4;
+}
+
+.slot.filled {
+  background: #c8f7c5;
+  border: 3px solid #34c759;
+  color: #1d7a33;
+  animation: starFill 0.45s ease;
+}
+
+.tile {
+  background: linear-gradient(180deg, #fff8e1, #ffe9a8);
+  border-radius: 18px;
+  font-size: clamp(30px, 8vw, 44px);
+  font-weight: bold;
+  color: #7a4d00;
+  padding: 16px 6px;
+  box-shadow: 0 6px 0 #e0b64f, 0 10px 18px rgba(60,30,120,0.15);
+  transition: transform 0.1s, box-shadow 0.1s, opacity 0.3s;
+  direction: rtl;
+  line-height: 1.4;
+}
+
+.tile:active { transform: translateY(4px); box-shadow: 0 2px 0 #e0b64f; }
+
+.tile.used { opacity: 0.25; pointer-events: none; transform: scale(0.9); }
+
+.tile.bad {
+  background: linear-gradient(180deg, #ffd2d2, #ff9d9d);
+  color: #8f1d1d;
+  box-shadow: 0 6px 0 #e07070;
+  animation: badShake 0.5s ease;
+}
+
+.tile.guide { animation: revealPulse 0.9s ease-in-out infinite; box-shadow: 0 0 0 5px #ffd23f, 0 6px 0 #e0b64f; }
+
+.tile.wobble { animation: cardShake 0.35s ease; }
+.tile.unlock-bounce { animation: unlockBounce 0.4s ease; }
+
+/* כרטיסי דוגמה בחלון ההסבר */
+.demo-cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  direction: rtl;
+}
+
+.demo-card {
+  background: linear-gradient(180deg, #ffffff, #f1eaff);
+  border: 3px solid #d9ccf7;
+  border-radius: 18px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 4px 0 #c9b8f0;
+  transition: transform 0.1s;
+  min-width: 64px;
+}
+
+.demo-card:active { transform: scale(0.94); }
+.demo-card.wide { flex-direction: column; padding: 12px 18px; }
+.demo-card.wobble { animation: cardShake 0.4s ease; }
+
+.demo-main { font-size: clamp(30px, 8vw, 42px); font-weight: bold; color: #5b3fa8; line-height: 1.4; }
+.demo-sub { font-size: 14px; color: #7a6aa8; }
+
+/* מדף מדבקות בשתי שורות */
+.shelf-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shelf-tag { font-size: 17px; opacity: 0.75; }
+
+.shelf-line .sticker-row { min-height: 34px; flex: 1; justify-content: flex-start; font-size: 24px; }
+
 /* מסכים צרים מאוד */
 @media (max-width: 360px) {
   .options { gap: 8px; }

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>משחקים ולומדים 🎈</title>
-  <meta name="description" content="משחקי חשבון מהנים לילדים - לומדים לספור, לחבר ולחסר עם צלילים והסברים קוליים">
+  <meta name="description" content="משחקי למידה מהנים לילדים - חשבון, אותיות ומילים, עם צלילים והסברים קוליים">
   <meta name="theme-color" content="#7c4dff">
 
   <link rel="manifest" href="./manifest.webmanifest">
@@ -36,7 +36,8 @@
 
     <section class="shelf" aria-label="המדבקות שאספתי">
       <div class="shelf-title">🏆 המדבקות שלי</div>
-      <div id="sticker-row" class="sticker-row"></div>
+      <div class="shelf-line"><span class="shelf-tag">🧮</span><div id="sticker-row-math" class="sticker-row"></div></div>
+      <div class="shelf-line"><span class="shelf-tag">🔤</span><div id="sticker-row-letters" class="sticker-row"></div></div>
       <div id="total-stars" class="total-stars"></div>
     </section>
 
@@ -48,10 +49,11 @@
         <span class="card-go">▶ בוא נשחק!</span>
       </button>
 
-      <button id="card-words" class="game-card words locked">
+      <button id="card-words" class="game-card words">
         <span class="card-icon">🔤</span>
         <span class="card-name">אותיות ומילים</span>
-        <span class="card-info">🔒 בקרוב!</span>
+        <span class="card-info" id="letters-card-info">רמה 1</span>
+        <span class="card-go">▶ בוא נשחק!</span>
       </button>
     </section>
 
@@ -126,11 +128,19 @@
         <button id="set-test-voice" class="btn">שמע דוגמה</button>
       </div>
       <div class="set-row">
-        <span>🪜 רמה נוכחית</span>
+        <span>🧮 רמה בחשבון</span>
         <div class="level-adjust">
           <button id="set-lvl-down" class="btn small">−</button>
           <span id="set-lvl-val">1</span>
           <button id="set-lvl-up" class="btn small">+</button>
+        </div>
+      </div>
+      <div class="set-row">
+        <span>🔤 רמה באותיות</span>
+        <div class="level-adjust">
+          <button id="set-lvl2-down" class="btn small">−</button>
+          <span id="set-lvl2-val">1</span>
+          <button id="set-lvl2-up" class="btn small">+</button>
         </div>
       </div>
       <div class="set-row stats" id="set-stats"></div>
@@ -158,7 +168,10 @@
   <script src="./js/speech.js"></script>
   <script src="./js/confetti.js"></script>
   <script src="./js/levels.js"></script>
+  <script src="./js/letters-levels.js"></script>
+  <script src="./js/engine.js"></script>
   <script src="./js/game.js"></script>
+  <script src="./js/letters-game.js"></script>
   <script src="./js/app.js"></script>
 </body>
 </html>

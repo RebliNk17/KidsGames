@@ -4,29 +4,60 @@ const App = (() => {
   const STORAGE_KEY = 'kidsgames-progress-v1';
   const $ = id => document.getElementById(id);
 
-  const DEFAULT_STATE = {
-    v: 1,
+  const GAME_SLICE = () => ({
     maxLevel: 1,       // הרמה הגבוהה שנפתחה (חלון הרמות נגזר ממנה)
     stars: 0,          // התקדמות לרמה הבאה
     explainedUpTo: 0,  // עד איזו רמה כבר הוצג הסבר
     totalStars: 0,
     answered: 0,
-    firstTry: 0,
+    firstTry: 0
+  });
+
+  const DEFAULT_STATE = () => ({
+    v: 2,
     soundOn: true,
-    speechOn: true
-  };
+    speechOn: true,
+    math: GAME_SLICE(),
+    letters: GAME_SLICE()
+  });
 
   let state = load();
   let deferredInstall = null;
+  let activeEngine = null;
 
-  /* ─── שמירה וטעינה ─── */
+  /* ─── שמירה, טעינה ומיגרציה ─── */
+
+  function migrate(raw) {
+    if (!raw.v || raw.v === 1) {
+      // גרסה 1: התקדמות החשבון ישבה בשורש - מעבירים לפרוסה, שומרים הכול
+      return {
+        v: 2,
+        soundOn: raw.soundOn !== false,
+        speechOn: raw.speechOn !== false,
+        math: {
+          maxLevel: raw.maxLevel || 1,
+          stars: raw.stars || 0,
+          explainedUpTo: raw.explainedUpTo || 0,
+          totalStars: raw.totalStars || 0,
+          answered: raw.answered || 0,
+          firstTry: raw.firstTry || 0
+        },
+        letters: GAME_SLICE()
+      };
+    }
+    // השלמת שדות חסרים בעתיד
+    const st = Object.assign(DEFAULT_STATE(), raw);
+    st.math = Object.assign(GAME_SLICE(), raw.math);
+    st.letters = Object.assign(GAME_SLICE(), raw.letters);
+    return st;
+  }
 
   function load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return Object.assign({}, DEFAULT_STATE, JSON.parse(raw));
+      if (raw) return migrate(JSON.parse(raw));
     } catch (e) { /* אחסון חסום - משחקים בלי שמירה */ }
-    return Object.assign({}, DEFAULT_STATE);
+    return DEFAULT_STATE();
   }
 
   function save() {
@@ -43,55 +74,58 @@ const App = (() => {
   }
 
   function goHome() {
-    Game.stop();
+    if (activeEngine) activeEngine.stop();
+    activeEngine = null;
     show('screen-home');
     refreshHome();
   }
 
-  function startMath() {
+  function openGame(engine) {
     Sounds.ensure();
     Sounds.click();
+    activeEngine = engine;
+    $('mascot').textContent = engine.key === 'letters' ? '🦉' : '🦊';
     show('screen-game');
-    Game.open();
+    engine.open();
   }
 
   /* ─── מסך הבית ─── */
 
-  function refreshHome() {
-    const L = Levels.LEVELS;
-    $('math-card-info').textContent =
-      `רמה ${state.maxLevel} מתוך ${L.length} · ${L[state.maxLevel - 1].name}`;
-
-    const row = $('sticker-row');
-    row.innerHTML = '';
-    if (state.maxLevel === 1 && state.totalStars === 0) {
-      const note = document.createElement('span');
-      note.className = 'empty-note';
-      note.textContent = 'שחק ואסוף מדבקות וכוכבים! ✨';
-      row.appendChild(note);
-    } else {
-      for (let i = 0; i < L.length; i++) {
-        const s = document.createElement('span');
-        const done = i < state.maxLevel - 1;
-        const current = i === state.maxLevel - 1;
-        if (!done && !current) continue;
-        s.className = 'sticker' + (current ? ' pending' : '');
-        s.textContent = L[i].icon;
-        s.style.animationDelay = (i * 60) + 'ms';
-        s.title = L[i].name;
-        row.appendChild(s);
-      }
+  function stickerRowFor(levels, slice, rowEl) {
+    rowEl.innerHTML = '';
+    for (let i = 0; i < levels.length; i++) {
+      const done = i < slice.maxLevel - 1;
+      const current = i === slice.maxLevel - 1;
+      if (!done && !current) continue;
+      const s = document.createElement('span');
+      s.className = 'sticker' + (current ? ' pending' : '');
+      s.textContent = levels[i].icon;
+      s.style.animationDelay = (i * 60) + 'ms';
+      s.title = levels[i].name;
+      rowEl.appendChild(s);
     }
-    $('total-stars').textContent = state.totalStars > 0
-      ? `אספת ${state.totalStars} ⭐ עד עכשיו!`
-      : '';
+  }
+
+  function refreshHome() {
+    const ML = Levels.LEVELS, LL = LettersLevels.LEVELS;
+
+    $('math-card-info').textContent =
+      `רמה ${state.math.maxLevel} מתוך ${ML.length} · ${ML[state.math.maxLevel - 1].name}`;
+    $('letters-card-info').textContent =
+      `רמה ${state.letters.maxLevel} מתוך ${LL.length} · ${LL[state.letters.maxLevel - 1].name}`;
+
+    stickerRowFor(ML, state.math, $('sticker-row-math'));
+    stickerRowFor(LL, state.letters, $('sticker-row-letters'));
+
+    const total = state.math.totalStars + state.letters.totalStars;
+    $('total-stars').textContent = total > 0 ? `אספת ${total} ⭐ עד עכשיו!` : 'שחק ואסוף מדבקות וכוכבים! ✨';
   }
 
   /* ─── רקע מונפש ─── */
 
   function makeBubbles() {
     const box = $('bg-bubbles');
-    const icons = ['⭐', '🎈', '☁️', '✨', '🔢', '➕', '💜', '🌈'];
+    const icons = ['⭐', '🎈', '☁️', '✨', '🔢', '➕', '💜', '🌈', 'א', 'ב'];
     for (let i = 0; i < 14; i++) {
       const b = document.createElement('span');
       b.className = 'bubble';
@@ -151,13 +185,35 @@ const App = (() => {
     sSound.classList.toggle('off', !state.soundOn);
     sSpeech.textContent = state.speechOn ? 'פועל 🗣️' : 'כבוי 🤐';
     sSpeech.classList.toggle('off', !state.speechOn);
-    $('set-lvl-val').textContent = String(state.maxLevel);
-    const acc = state.answered ? Math.round(100 * state.firstTry / state.answered) : 0;
+
+    $('set-lvl-val').textContent = String(state.math.maxLevel);
+    $('set-lvl2-val').textContent = String(state.letters.maxLevel);
+
+    const tAns = state.math.answered + state.letters.answered;
+    const tFirst = state.math.firstTry + state.letters.firstTry;
+    const acc = tAns ? Math.round(100 * tFirst / tAns) : 0;
     $('set-stats').textContent =
-      `ענה על ${state.answered} תרגילים · ${state.firstTry} נכונים בניסיון ראשון (${acc}%)`;
+      `ענה על ${tAns} תרגילים · ${tFirst} נכונים בניסיון ראשון (${acc}%)`;
     if (Speech.supported && !Speech.hasHebrewVoice()) {
       $('set-stats').textContent += ' · ⚠️ לא נמצא קול עברי במכשיר';
     }
+  }
+
+  function levelAdjuster(btnDownId, btnUpId, slice, engine, maxLevels) {
+    $(btnDownId).addEventListener('click', () => {
+      if (slice().maxLevel > 1) {
+        slice().maxLevel--;
+        engine().applyLevelChange();
+        updateSettingsUI();
+      }
+    });
+    $(btnUpId).addEventListener('click', () => {
+      if (slice().maxLevel < maxLevels) {
+        slice().maxLevel++;
+        engine().applyLevelChange();
+        updateSettingsUI();
+      }
+    });
   }
 
   function setupSettings() {
@@ -183,24 +239,11 @@ const App = (() => {
     });
 
     $('set-test-voice').addEventListener('click', () => {
-      Speech.speak('שלום! ככה אני נשמע. בוא נלמד חשבון ביחד!');
+      Speech.speak('שלום! ככה אני נשמע. בוא נלמד ביחד!');
     });
 
-    $('set-lvl-down').addEventListener('click', () => {
-      if (state.maxLevel > 1) {
-        state.maxLevel--;
-        Game.applyLevelChange();
-        updateSettingsUI();
-      }
-    });
-
-    $('set-lvl-up').addEventListener('click', () => {
-      if (state.maxLevel < Levels.LEVELS.length) {
-        state.maxLevel++;
-        Game.applyLevelChange();
-        updateSettingsUI();
-      }
-    });
+    levelAdjuster('set-lvl-down', 'set-lvl-up', () => state.math, () => MathGame, Levels.LEVELS.length);
+    levelAdjuster('set-lvl2-down', 'set-lvl2-up', () => state.letters, () => LettersGame, LettersLevels.LEVELS.length);
 
     $('set-reset').addEventListener('click', () => {
       $('overlay-confirm').classList.remove('hidden');
@@ -260,27 +303,18 @@ const App = (() => {
     setupSettings();
     setupInstall();
     registerSW();
-    Game.init();
+    MathGame.init();
 
-    // פתיחת אודיו בלחיצה הראשונה על המסך
     document.addEventListener('pointerdown', () => Sounds.ensure(), { once: true });
 
-    $('card-math').addEventListener('click', startMath);
-
-    $('card-words').addEventListener('click', () => {
-      const card = $('card-words');
-      card.classList.add('card-shake');
-      setTimeout(() => card.classList.remove('card-shake'), 550);
-      Sounds.ensure();
-      Sounds.tick();
-      Speech.speak('משחק האותיות עוד בהכנה. בקרוב! בינתיים בוא נשחק בחשבון!');
-    });
+    $('card-math').addEventListener('click', () => openGame(MathGame));
+    $('card-words').addEventListener('click', () => openGame(LettersGame));
 
     $('btn-back').addEventListener('click', () => { Sounds.click(); goHome(); });
-    $('btn-say').addEventListener('click', () => { Sounds.click(); Game.sayQuestion(); });
-    $('btn-help').addEventListener('click', () => { Sounds.click(); Game.showHelp(); });
-    $('btn-explain-replay').addEventListener('click', () => { Sounds.click(); Game.replayExplain(); });
-    $('btn-explain-start').addEventListener('click', () => { Sounds.click(); Game.closeExplain(); });
+    $('btn-say').addEventListener('click', () => { Sounds.click(); activeEngine && activeEngine.sayQuestion(); });
+    $('btn-help').addEventListener('click', () => { Sounds.click(); activeEngine && activeEngine.showHelp(); });
+    $('btn-explain-replay').addEventListener('click', () => { Sounds.click(); activeEngine && activeEngine.replayExplain(); });
+    $('btn-explain-start').addEventListener('click', () => { Sounds.click(); activeEngine && activeEngine.closeExplain(); });
 
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) { save(); Speech.stop(); }
@@ -289,8 +323,19 @@ const App = (() => {
 
   document.addEventListener('DOMContentLoaded', init);
 
-  return { get state() { return state; }, save, refreshHome };
+  return {
+    get state() { return state; },
+    get activeEngine() { return activeEngine; },
+    save,
+    refreshHome
+  };
 })();
 
 /* חשיפה לבדיקות אוטומטיות */
-window.__KG = { App, get Game() { return Game; }, Levels };
+window.__KG = {
+  App,
+  get Game() { return MathGame; },
+  get LettersGame() { return LettersGame; },
+  Levels,
+  get LettersLevels() { return LettersLevels; }
+};

@@ -1,7 +1,7 @@
 /* Service Worker - מאפשר עבודה גם בלי אינטרנט והתקנה כאפליקציה.
  * כשמעדכנים קבצים באתר - יש להעלות את מספר הגרסה כאן כדי שהעדכון יגיע לכולם. */
 
-const CACHE = 'kidsgames-v1';
+const CACHE = 'kidsgames-v2';
 
 const ASSETS = [
   './',
@@ -11,7 +11,10 @@ const ASSETS = [
   './js/speech.js',
   './js/confetti.js',
   './js/levels.js',
+  './js/letters-levels.js',
+  './js/engine.js',
   './js/game.js',
+  './js/letters-game.js',
   './js/app.js',
   './manifest.webmanifest',
   './icons/favicon.svg',
