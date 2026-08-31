@@ -166,36 +166,54 @@ const App = (() => {
     });
   }
 
-  /* ─── מסך הבית ─── */
+  /* ─── מסך הבית: אלבום המדבקות ─── */
 
   function stickerRowFor(levels, slice, rowEl) {
     rowEl.innerHTML = '';
-    for (let i = 0; i < levels.length; i++) {
-      const done = i < slice.maxLevel - 1;
+    levels.forEach((L, i) => {
+      const earned = i < slice.maxLevel - 1;
       const current = i === slice.maxLevel - 1;
-      if (!done && !current) continue;
-      const s = document.createElement('span');
-      s.className = 'sticker' + (current ? ' pending' : '');
-      s.textContent = levels[i].icon;
-      s.style.animationDelay = (i * 60) + 'ms';
-      s.title = levels[i].name;
-      rowEl.appendChild(s);
-    }
+      const b = document.createElement('button');
+      b.className = 'stkr ' + (earned ? 'earned' : current ? 'current' : 'locked');
+      // הטיה קבועה-אקראית לכל מדבקה, כמו באלבום אמיתי
+      b.style.setProperty('--tilt', (((i * 37) % 13) - 6) + 'deg');
+      if (earned) b.style.animationDelay = (i * 40) + 'ms';
+      b.textContent = earned || current ? L.icon : '?';
+      b.title = earned || current ? `רמה ${L.id}: ${L.name}` : 'מדבקה נעולה';
+      b.addEventListener('click', () => {
+        b.classList.remove('boing');
+        void b.offsetWidth;
+        b.classList.add('boing');
+        if (earned) {
+          Sounds.sticker();
+          Speech.speak(`רמה ${L.id}: ${L.name}!`);
+        } else if (current) {
+          Sounds.click();
+          Speech.speak(`על המדבקה הזאת אתה עובד עכשיו: ${L.name}!`);
+        } else {
+          Sounds.tick();
+        }
+      });
+      rowEl.appendChild(b);
+    });
   }
 
   function refreshHome() {
-    const ML = Levels.LEVELS, LL = LettersLevels.LEVELS;
+    // מוקשח: תקלה קוסמטית כאן לא תפיל את שאר האפליקציה
+    try {
+      const ML = Levels.LEVELS, LL = LettersLevels.LEVELS;
 
-    $('math-card-info').textContent =
-      `רמה ${state.math.maxLevel} מתוך ${ML.length} · ${ML[state.math.maxLevel - 1].name}`;
-    $('letters-card-info').textContent =
-      `רמה ${state.letters.maxLevel} מתוך ${LL.length} · ${LL[state.letters.maxLevel - 1].name}`;
+      $('math-card-info').textContent =
+        `רמה ${state.math.maxLevel} מתוך ${ML.length} · ${ML[state.math.maxLevel - 1].name}`;
+      $('letters-card-info').textContent =
+        `רמה ${state.letters.maxLevel} מתוך ${LL.length} · ${LL[state.letters.maxLevel - 1].name}`;
 
-    stickerRowFor(ML, state.math, $('sticker-row-math'));
-    stickerRowFor(LL, state.letters, $('sticker-row-letters'));
+      stickerRowFor(ML, state.math, $('sticker-row-math'));
+      stickerRowFor(LL, state.letters, $('sticker-row-letters'));
 
-    const total = state.math.totalStars + state.letters.totalStars;
-    $('total-stars').textContent = total > 0 ? `אספת ${total} ⭐ עד עכשיו!` : 'שחק ואסוף מדבקות וכוכבים! ✨';
+      const total = state.math.totalStars + state.letters.totalStars;
+      $('total-stars').textContent = total > 0 ? `אספת ${total} ⭐ עד עכשיו!` : 'שחק ואסוף מדבקות וכוכבים! ✨';
+    } catch (e) { /* מסך הבית תמיד חייב להישאר לחיץ */ }
   }
 
   /* ─── רקע מונפש ─── */
@@ -367,6 +385,16 @@ const App = (() => {
   /* ─── אתחול ─── */
 
   function init() {
+    // קודם כל מחווטים את הכפתורים החיוניים - שום שגיאה בהמשך האתחול
+    // לא תשאיר מסך שאי אפשר ללחוץ עליו (לקח מתקלת גרסאות אמיתית!)
+    $('card-math').addEventListener('click', () => openGame(MathGame));
+    $('card-words').addEventListener('click', () => openGame(LettersGame));
+    $('btn-back').addEventListener('click', () => { Sounds.click(); goHome(); });
+    $('btn-say').addEventListener('click', () => { Sounds.click(); activeEngine && activeEngine.sayQuestion(); });
+    $('btn-help').addEventListener('click', () => { Sounds.click(); activeEngine && activeEngine.showHelp(); });
+    $('btn-explain-replay').addEventListener('click', () => { Sounds.click(); activeEngine && activeEngine.replayExplain(); });
+    $('btn-explain-start').addEventListener('click', () => { Sounds.click(); activeEngine && activeEngine.closeExplain(); });
+
     Speech.init();
     Sounds.setEnabled(state.soundOn);
     Speech.setEnabled(state.speechOn);
@@ -374,7 +402,7 @@ const App = (() => {
       $('mascot').classList.toggle('talking', talking);
     });
 
-    makeBubbles();
+    try { makeBubbles(); } catch (e) { }
     refreshHome();
     setupParentGate();
     setupSettings();
@@ -384,15 +412,6 @@ const App = (() => {
     MathGame.init();
 
     document.addEventListener('pointerdown', () => Sounds.ensure(), { once: true });
-
-    $('card-math').addEventListener('click', () => openGame(MathGame));
-    $('card-words').addEventListener('click', () => openGame(LettersGame));
-
-    $('btn-back').addEventListener('click', () => { Sounds.click(); goHome(); });
-    $('btn-say').addEventListener('click', () => { Sounds.click(); activeEngine && activeEngine.sayQuestion(); });
-    $('btn-help').addEventListener('click', () => { Sounds.click(); activeEngine && activeEngine.showHelp(); });
-    $('btn-explain-replay').addEventListener('click', () => { Sounds.click(); activeEngine && activeEngine.replayExplain(); });
-    $('btn-explain-start').addEventListener('click', () => { Sounds.click(); activeEngine && activeEngine.closeExplain(); });
 
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) { save(); Speech.stop(); }

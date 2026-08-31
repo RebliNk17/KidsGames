@@ -103,29 +103,100 @@ button {
   text-align: center;
 }
 
-.shelf-title { font-size: 15px; color: #7c4dff; font-weight: bold; }
-
-.sticker-row {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 4px;
-  min-height: 40px;
-  align-items: center;
-  font-size: 28px;
-}
-
-.sticker-row .empty-note { font-size: 14px; color: #9a8cc4; }
-
-.sticker { display: inline-block; animation: stickerPop 0.5s ease backwards; }
-.sticker.pending { filter: grayscale(1); opacity: 0.35; }
+.shelf-title { font-size: 15px; color: #7c4dff; font-weight: bold; margin-bottom: 4px; }
 
 @keyframes stickerPop {
   from { transform: scale(0) rotate(-30deg); }
   to   { transform: scale(1) rotate(0); }
 }
 
-.total-stars { font-size: 14px; color: #6a5a9e; margin-top: 2px; }
+/* אלבום מדבקות: שורה לכל משחק */
+.shelf-sec {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+  text-align: right;
+}
+
+.shelf-chip {
+  font-size: 12px;
+  font-weight: bold;
+  color: #fff;
+  padding: 5px 11px;
+  border-radius: 12px;
+  white-space: nowrap;
+  margin-top: 6px;
+  box-shadow: 0 2px 4px rgba(60, 30, 120, 0.2);
+}
+
+.chip-math    { background: linear-gradient(135deg, #ff8a3d, #ff4d94); }
+.chip-letters { background: linear-gradient(135deg, #00c2a8, #0090d4); }
+
+.sticker-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  flex: 1;
+  justify-content: flex-start;
+}
+
+/* מדבקה בודדת */
+.stkr {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 19px;
+  line-height: 1;
+  padding: 0;
+  position: relative;
+  transform: rotate(var(--tilt, 0deg));
+  transition: transform 0.15s;
+}
+
+.stkr.earned {
+  background: radial-gradient(circle at 32% 28%, #ffffff, #f0e7ff 75%);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 5px rgba(60, 30, 120, 0.28), inset 0 0 0 2px var(--ring, #e4dbfa);
+  animation: stickerPop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) backwards;
+}
+
+.shelf-sec.math    .stkr.earned { --ring: #ffd6c2; }
+.shelf-sec.letters .stkr.earned { --ring: #bfeae2; }
+
+/* נצנוץ קטן בפינת המדבקה */
+.stkr.earned::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffffee, #ffffff00 72%);
+}
+
+.stkr.current {
+  background: #fff8e6;
+  border: 2px dashed #ffb03a;
+  filter: saturate(0.75);
+  animation: pulseSoft 1.5s ease-in-out infinite;
+}
+
+.stkr.locked {
+  background: #ffffff59;
+  border: 2px dashed #d5cbef;
+  color: #b9a4f2;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.stkr.boing { animation: unlockBounce 0.4s ease; }
+
+.total-stars { font-size: 14px; color: #6a5a9e; margin-top: 8px; }
 
 .cards {
   display: flex;
@@ -994,17 +1065,6 @@ button {
 
 .demo-main { font-size: clamp(30px, 8vw, 42px); font-weight: bold; color: #5b3fa8; line-height: 1.4; }
 .demo-sub { font-size: 14px; color: #7a6aa8; }
-
-/* מדף מדבקות בשתי שורות */
-.shelf-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.shelf-tag { font-size: 17px; opacity: 0.75; }
-
-.shelf-line .sticker-row { min-height: 34px; flex: 1; justify-content: flex-start; font-size: 24px; }
 
 /* מסכים צרים מאוד */
 @media (max-width: 360px) {

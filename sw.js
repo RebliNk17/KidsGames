@@ -1,21 +1,27 @@
 /* Service Worker - מאפשר עבודה גם בלי אינטרנט והתקנה כאפליקציה.
- * כשמעדכנים קבצים באתר - יש להעלות את מספר הגרסה כאן כדי שהעדכון יגיע לכולם. */
+ *
+ * בכל עדכון של האתר מעלים את המספר בשני מקומות יחד:
+ *   1. CACHE כאן (v4 ← v5)
+ *   2. ה-?v= שבקישורי ה-JS/CSS ב-index.html
+ * ככה ה-HTML תמיד טוען קבצים מאותה גרסה בדיוק, וגם דפדפן עם מטמון ישן
+ * לא יערבב קוד ישן עם HTML חדש (זה בדיוק מה שתקע את המסך פעם אחת). */
 
-const CACHE = 'kidsgames-v3';
+const CACHE = 'kidsgames-v4';
+const V = '?v=4';
 
 const ASSETS = [
   './',
   './index.html',
-  './css/style.css',
-  './js/sounds.js',
-  './js/speech.js',
-  './js/confetti.js',
-  './js/levels.js',
-  './js/letters-levels.js',
-  './js/engine.js',
-  './js/game.js',
-  './js/letters-game.js',
-  './js/app.js',
+  './css/style.css' + V,
+  './js/sounds.js' + V,
+  './js/speech.js' + V,
+  './js/confetti.js' + V,
+  './js/levels.js' + V,
+  './js/letters-levels.js' + V,
+  './js/engine.js' + V,
+  './js/game.js' + V,
+  './js/letters-game.js' + V,
+  './js/app.js' + V,
   './manifest.webmanifest',
   './icons/favicon.svg',
   './icons/icon-192.png',
