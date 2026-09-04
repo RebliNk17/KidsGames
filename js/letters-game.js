@@ -13,7 +13,7 @@ const LettersGame = (() => {
   /* ─── ויזואליים ─── */
 
   function wordCardEl(units, { blankIdx = -1, revealBlank = false, hlIdx = -1 } = {}) {
-    const row = el('div', 'word-big nikud');
+    const row = el('div', 'word-big');
     units.forEach((u, i) => {
       let cls = 'unit';
       if (i === blankIdx) cls += revealBlank ? ' unit-revealed' : ' unit-blank';
@@ -34,7 +34,7 @@ const LettersGame = (() => {
         visualEl.appendChild(el('div', 'vis-emoji pop-in', v.e));
       }
       if (v.type === 'bigGlyph') {
-        visualEl.appendChild(el('div', 'vis-glyph pop-in nikud', v.text));
+        visualEl.appendChild(el('div', 'vis-glyph pop-in', v.text));
       }
       if (v.type === 'wordCard') {
         const wrap = el('div', 'word-wrap');
@@ -48,9 +48,9 @@ const LettersGame = (() => {
     }
 
     if (q.kind === 'build') {
-      const slots = el('div', 'build-slots nikud');
+      const slots = el('div', 'build-slots');
       slots.id = 'build-slots';
-      q.build.units.forEach((u, i) => {
+      q.build.units.forEach(u => {
         slots.appendChild(el('span', 'slot' + (reveal ? ' filled' : ''), reveal ? u : ''));
       });
       exprEl.appendChild(slots);
@@ -80,7 +80,7 @@ const LettersGame = (() => {
   /* ─── אינטראקציית בניית מילה ─── */
 
   function renderBuild(q, { optionsEl, exprEl }, api) {
-    let k = 0; // כמה יחידות כבר הונחו
+    let k = 0; // כמה אותיות כבר הונחו
     let guideOn = false;
     const units = q.build.units;
 
@@ -97,7 +97,7 @@ const LettersGame = (() => {
     };
 
     q.build.tiles.forEach(unit => {
-      const t = el('button', 'tile nikud', unit);
+      const t = el('button', 'tile', unit);
       t.dataset.unit = unit;
       t.addEventListener('click', () => {
         if (t.classList.contains('used')) return;
@@ -113,12 +113,13 @@ const LettersGame = (() => {
           k++;
           if (guideOn) highlightNext();
           if (k === units.length) {
-            Speech.speak(q.word.p + '!');
+            Speech.speak(q.word.w + '!');
             setTimeout(() => api.done(exprEl.querySelector('#build-slots')), 250);
           }
         } else {
           const attempts = api.miss(t, { lockMs: 2000 });
-          if (attempts >= 3) highlightNext();
+          // אחרי שלוש טעויות (ובמבחן - מיד) מדגישים את האות הבאה
+          if (attempts >= 3 || api.isTest()) highlightNext();
         }
       });
       optionsEl.appendChild(t);
@@ -129,7 +130,7 @@ const LettersGame = (() => {
 
   function demoCard(content, sub, onTap) {
     const c = el('button', 'demo-card');
-    c.appendChild(el('span', 'demo-main nikud', content));
+    c.appendChild(el('span', 'demo-main', content));
     if (sub) c.appendChild(el('span', 'demo-sub', sub));
     c.addEventListener('click', () => {
       Sounds.click();
@@ -140,9 +141,24 @@ const LettersGame = (() => {
     return c;
   }
 
-  const SOUND_LABEL = { a: 'אַה!', i: 'אִי!', o: 'אוֹ!', e: 'אֶה!', u: 'אוּ!' };
+  /* כרטיס מילה רחב: המילה הכתובה + התמונה. לחיצה מקריאה את המילה (או טקסט אחר) */
+  function wordDemoCard(W, { hlIdx = -1, blankIdx = -1, rate = 0.8, extra = null, say = null } = {}) {
+    const wrap = el('div', 'word-wrap');
+    wrap.appendChild(wordCardEl(W.u, { hlIdx, blankIdx, revealBlank: blankIdx >= 0 }));
+    wrap.appendChild(el('div', 'word-side-emoji', W.e));
+    const btn = el('button', 'demo-card wide');
+    btn.appendChild(wrap);
+    if (extra) btn.appendChild(extra);
+    btn.addEventListener('click', () => {
+      Sounds.click();
+      Speech.speak(say || W.w, { rate });
+    });
+    return btn;
+  }
 
   function renderDemoSpec(spec, box) {
+    if (Array.isArray(spec)) { spec.forEach(s => renderDemoSpec(s, box)); return; }
+
     const row = el('div', 'demo-cards');
     box.appendChild(row);
 
@@ -162,61 +178,61 @@ const LettersGame = (() => {
             const ka = LL.byChar[a], kb = LL.byChar[b];
             Speech.speak(`${ka.kws[0].w} מתחיל בזאת, ${kb.kws[0].w} מתחיל בזאת. הן דומות אבל שונות!`);
           } else {
-            Speech.speak('אותה אות - צורה רגילה וצורה של סוף מילה!');
+            Speech.speak(`${LL.letterName(a)}. אותה אות - צורה רגילה וצורה של סוף מילה!`);
           }
         });
         row.appendChild(card);
       });
     }
 
-    if (spec.type === 'wordSound' || spec.type === 'wordReveal' || spec.type === 'claps') {
-      const W = LL.WORDS.find(x => x.w === spec.word) || { u: LL.splitUnits(spec.word), p: spec.word, e: '⭐', syl: 2 };
-      const wrap = el('div', 'word-wrap');
-      const hlIdx = spec.highlight === 'first' ? 0 : spec.highlight === 'last' ? W.u.length - 1 : -1;
-      wrap.appendChild(wordCardEl(W.u, { hlIdx }));
-      wrap.appendChild(el('div', 'word-side-emoji', W.e));
-      const btn = el('button', 'demo-card wide');
-      btn.appendChild(wrap);
-      if (spec.type === 'claps') btn.appendChild(el('div', 'demo-sub', '👏'.repeat(W.syl || 2)));
-      btn.addEventListener('click', () => {
-        Sounds.click();
-        Speech.speak(W.p, { rate: spec.type === 'claps' ? 0.6 : 0.8 });
+    /* מילים עם הדגשת האות הפותחת/הסוגרת */
+    if (spec.type === 'wordSound') {
+      spec.items.forEach(item => {
+        const W = LL.wordOf(item.word);
+        const hlIdx = item.highlight === 'first' ? 0 : item.highlight === 'last' ? W.u.length - 1 : -1;
+        row.appendChild(wordDemoCard(W, { hlIdx }));
       });
-      row.appendChild(btn);
     }
 
-    if (spec.type === 'vowelCards') {
-      spec.items.forEach(item => {
-        const L = LL.SYL_LETTERS.find(x => x.glyph === item.L) || LL.SYL_LETTERS[0];
-        const v = LL.VOWELS[item.v];
-        const glyph = LL.syllGlyph(L, v);
-        const label = spec.sayName ? v.name : (SOUND_LABEL[v.sound] || v.name);
-        row.appendChild(demoCard(glyph, label, () => {
-          if (spec.sayName) Speech.speak(`${v.name}. ${v.shape}.`);
-          else Speech.speak(LL.syllSpeech(L, v) + '. ' + LL.syllSpeech(L, v) + '!');
-        }));
+    if (spec.type === 'wordReveal') {
+      row.appendChild(wordDemoCard(LL.wordOf(spec.word)));
+    }
+
+    /* הברות: התמונה, המילה, ונקודה לכל הברה. לחיצה מקריאה לאט */
+    if (spec.type === 'syllables') {
+      spec.words.forEach(word => {
+        const W = LL.wordOf(word);
+        const dots = el('div', 'syl-dots', '●'.repeat(W.syl));
+        row.appendChild(wordDemoCard(W, { rate: 0.6, extra: dots }));
+      });
+    }
+
+    /* אות אחת ומילים שמתחילות/נגמרות בה */
+    if (spec.type === 'letterWords') {
+      const name = LL.letterName(spec.ch);
+      row.appendChild(demoCard(spec.ch, null, () => Speech.speak(name)));
+      spec.words.forEach(word => {
+        const W = LL.wordOf(word);
+        const hlIdx = spec.where === 'first' ? 0 : W.u.length - 1;
+        const say = spec.where === 'first'
+          ? `${W.w}. המילה ${W.w} מתחילה באות ${name}!`
+          : `${W.w}. המילה ${W.w} נגמרת באות ${name}!`;
+        row.appendChild(wordDemoCard(W, { hlIdx, say }));
       });
     }
 
     if (spec.type === 'missingDemo') {
-      const W = LL.WORDS.find(x => x.w === spec.word);
-      const wrap = el('div', 'word-wrap');
-      wrap.appendChild(wordCardEl(W.u, { blankIdx: spec.idx, revealBlank: true }));
-      wrap.appendChild(el('div', 'word-side-emoji', W.e));
-      const btn = el('button', 'demo-card wide');
-      btn.appendChild(wrap);
-      btn.addEventListener('click', () => { Sounds.click(); Speech.speak(W.p); });
-      row.appendChild(btn);
+      row.appendChild(wordDemoCard(LL.wordOf(spec.word), { blankIdx: spec.idx }));
     }
 
     if (spec.type === 'buildDemo') {
-      const W = LL.WORDS.find(x => x.w === spec.word);
+      const W = LL.wordOf(spec.word);
       const btn = el('button', 'demo-card wide');
       btn.appendChild(el('div', 'word-side-emoji', W.e));
-      const slots = el('div', 'build-slots nikud');
+      const slots = el('div', 'build-slots');
       W.u.forEach(u => slots.appendChild(el('span', 'slot filled', u)));
       btn.appendChild(slots);
-      btn.addEventListener('click', () => { Sounds.click(); Speech.speak(W.p); });
+      btn.addEventListener('click', () => { Sounds.click(); Speech.speak(W.w); });
       row.appendChild(btn);
     }
   }
@@ -227,7 +243,7 @@ const LettersGame = (() => {
 
   /* ─── חיבור למנוע ─── */
 
-  const OPT_CLASS = { letter: 'letter-opt nikud', emoji: 'emoji-opt', word: 'word-opt nikud', num: '' };
+  const OPT_CLASS = { letter: 'letter-opt', emoji: 'emoji-opt', word: 'word-opt', num: '' };
 
   const engine = createEngine({
     key: 'letters',
@@ -244,7 +260,19 @@ const LettersGame = (() => {
     },
     optionContent: (q, val) => String(val),
     defaultRevealSpeech: () => 'התשובה הנכונה מהבהבת! לחץ עליה ונמשיך.',
-    champSpeech: 'סיימת את כל רמות האותיות! אתה יודע לקרוא ולבנות מילים! אלוף אמיתי! ממשיכים להתאמן.'
+    champSpeech: 'סיימת את כל רמות האותיות! אתה יודע לקרוא ולבנות מילים! אלוף אמיתי! ממשיכים להתאמן.',
+
+    /* מבחן קטן אחרי כל 5 רמות */
+    testEvery: 5,
+    testLength: 10,
+    testPass: 7,
+    testIntro: (lo, hi, len, pass) =>
+      `הגיע הזמן למבחן קטן! ${len} שאלות על מה שלמדנו ברמות ${lo} עד ${hi}. ` +
+      `במבחן יש רק ניסיון אחד לכל שאלה, אז תחשוב טוב לפני שאתה בוחר. ` +
+      `מי שעונה נכון על ${pass} שאלות - מקבל מדליה! בהצלחה!`,
+    testResult: ({ score, total, passed }) => passed
+      ? `כל הכבוד! ענית נכון על ${score} מתוך ${total}! עברת את המבחן וקיבלת מדליה! ממשיכים לרמה הבאה!`
+      : `ענית נכון על ${score} מתוך ${total}. כמעט! בוא נתאמן עוד קצת, ואז ננסה שוב. אתה תצליח!`
   });
 
   return engine;

@@ -10,7 +10,9 @@ const App = (() => {
     explainedUpTo: 0,  // עד איזו רמה כבר הוצג הסבר
     totalStars: 0,
     answered: 0,
-    firstTry: 0
+    firstTry: 0,
+    medals: [],        // רמות שהמבחן אחריהן עבר (5, 10, ...) - מדליות באלבום
+    pendingTest: false // הגיע הזמן למבחן ועוד לא נעשה (נשמר גם אם יצאו באמצע)
   });
 
   const DEFAULT_STATE = () => ({
@@ -168,7 +170,7 @@ const App = (() => {
 
   /* ─── מסך הבית: אלבום המדבקות ─── */
 
-  function stickerRowFor(levels, slice, rowEl) {
+  function stickerRowFor(levels, slice, rowEl, testEvery = 0) {
     rowEl.innerHTML = '';
     levels.forEach((L, i) => {
       const earned = i < slice.maxLevel - 1;
@@ -195,7 +197,32 @@ const App = (() => {
         }
       });
       rowEl.appendChild(b);
+
+      // אחרי כל בלוק רמות - מדליה על המבחן
+      if (testEvery && L.id % testEvery === 0) rowEl.appendChild(medalFor(L.id, testEvery, slice));
     });
+  }
+
+  function medalFor(levelId, testEvery, slice) {
+    const got = (slice.medals || []).includes(levelId);
+    const lo = levelId - testEvery + 1;
+    const m = document.createElement('button');
+    m.className = 'stkr medal ' + (got ? 'earned' : 'locked');
+    m.textContent = '🏅';
+    m.title = got ? `מדליה: עברת את המבחן על רמות ${lo}-${levelId}` : `מדליה נעולה: עוברים את המבחן של רמות ${lo}-${levelId}`;
+    m.addEventListener('click', () => {
+      m.classList.remove('boing');
+      void m.offsetWidth;
+      m.classList.add('boing');
+      if (got) {
+        Sounds.sticker();
+        Speech.speak(`מדליה! עברת את המבחן על רמות ${lo} עד ${levelId}!`);
+      } else {
+        Sounds.tick();
+        Speech.speak(`מדליה למי שעובר את המבחן על רמות ${lo} עד ${levelId}!`);
+      }
+    });
+    return m;
   }
 
   function refreshHome() {
@@ -209,7 +236,7 @@ const App = (() => {
         `רמה ${state.letters.maxLevel} מתוך ${LL.length} · ${LL[state.letters.maxLevel - 1].name}`;
 
       stickerRowFor(ML, state.math, $('sticker-row-math'));
-      stickerRowFor(LL, state.letters, $('sticker-row-letters'));
+      stickerRowFor(LL, state.letters, $('sticker-row-letters'), LettersGame.TEST_EVERY);
 
       const total = state.math.totalStars + state.letters.totalStars;
       $('total-stars').textContent = total > 0 ? `אספת ${total} ⭐ עד עכשיו!` : 'שחק ואסוף מדבקות וכוכבים! ✨';

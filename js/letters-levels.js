@@ -1,14 +1,19 @@
 /* ═══════════════ משחק האותיות והמילים - 20 רמות ═══════════════
- * מסלול לימוד לילד שעוד לא קורא:
- *   הכרת אותיות (1-7) ← מודעות פונולוגית (8-10) ← ניקוד (11-14) ← קריאה ובנייה (15-20)
+ * מסלול לימוד לילד שעוד לא קורא, בלי ניקוד (כתיב מלא):
+ *   הכרת אותיות (1-6) ← אות פותחת, אות סוגרת, סופיות והברות (7-14) ← קריאה ובנייה (15-20)
+ *   אחרי כל 5 רמות יש מבחן קטן על מה שנלמד (מנוהל במנוע, ראה engine.js).
  *
  * עקרונות חשובים:
- * - הילד לא קורא, לכן כל הנחיה עוברת בקול. טקסטים להקראה נכתבים כך
- *   שיישמעו נכון גם בקול דפדפן פשוט (מילים שלמות, לא אותיות בודדות).
- * - אותיות שנשמעות אותו דבר (א/ע, כ/ק/ח, ט/ת, ס/ש, ב/ו) לעולם לא יופיעו
+ * - הילד לא קורא, לכן כל הנחיה עוברת בקול. המילה שעליה שואלים לעולם לא
+ *   כתובה על המסך (רק התמונה שלה) - אחרת אפשר "לראות" את התשובה.
+ * - אין ניקוד בשום מקום על המסך. שמות האותיות מנוקדים רק בטקסט להקראה,
+ *   כדי שקול הדפדפן יהגה אותם נכון (בֵּית ולא בַּיִת).
+ * - אותיות שנשמעות אותו דבר (א/ע/ה, כ/ק/ח, ט/ת, ס/ש, ב/ו) לעולם לא יופיעו
  *   כמסיחים זו של זו בתרגילי צליל - אין תשובה "כמעט נכונה".
- * - בתרגילי קריאה המסיחים מתחילים באותה אות כשאפשר, כדי שאי אפשר יהיה
- *   לנחש לפי האות הראשונה בלבד.
+ * - כל מאגר (אותיות, מילים) נשלף מ"חפיסה" מעורבבת: לא חוזרים על אותו
+ *   פריט עד שכל החפיסה נגמרה, ולכן אותה שאלה לא חוזרת פעמיים ברצף.
+ * - בתרגילי תמונות מקריאים את שמות כל התמונות (בסדר שבו הן על המסך),
+ *   כדי שהילד ידע איך קוראים לכל תמונה.
  * המחוללים טהורים (בלי DOM) לבדיקה ב-node.
  */
 
@@ -16,7 +21,6 @@ const LettersLevels = (() => {
 
   /* ─── עזרים ─── */
   const ri = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
-  const pick = arr => arr[ri(0, arr.length - 1)];
 
   function shuffle(arr) {
     const a = arr.slice();
@@ -27,55 +31,82 @@ const LettersLevels = (() => {
     return a;
   }
 
-  /* פירוק מילה מנוקדת ליחידות: אות + סימני הניקוד שאחריה */
-  function splitUnits(word) {
-    const units = [];
-    for (const ch of word) {
-      if (ch >= 'א' && ch <= 'ת') units.push(ch);
-      else if (units.length) units[units.length - 1] += ch;
-    }
-    return units;
+  /* חפיסה: מערבבים, שולפים אחד-אחד, וכשנגמר מערבבים מחדש.
+     הפריט הראשון בסבב החדש לעולם לא יהיה זה שסגר את הסבב הקודם -
+     כך שני שליפות רצופות תמיד שונות (כשיש יותר מפריט אחד). */
+  function makeDeck(items) {
+    let queue = [];
+    let last = null;
+    return () => {
+      if (!queue.length) {
+        queue = shuffle(items);
+        if (queue.length > 1 && queue[queue.length - 1] === last) queue.unshift(queue.pop());
+      }
+      last = queue.pop();
+      return last;
+    };
   }
 
-  const baseOf = unit => unit[0];
+  const decks = {};
+  const draw = (key, items) => (decks[key] || (decks[key] = makeDeck(items)))();
+
+  /* בחירה לפי משקלים: mix([[3, fnA], [1, fnB]]) - fnA נבחרת פי 3 יותר */
+  function mix(entries) {
+    const total = entries.reduce((s, e) => s + e[0], 0);
+    let r = Math.random() * total;
+    for (const [w, fn] of entries) {
+      r -= w;
+      if (r < 0) return fn();
+    }
+    return entries[entries.length - 1][1]();
+  }
 
   /* ─── האותיות ─── */
-  /* sname - שם להקראה (מנוקד, למקומות לא קריטיים); kws - מילות מפתח עם אמוג'י;
-     sg - קבוצת צליל (אותיות באותה קבוצה נשמעות דומה ולא ישמשו כמסיחים בתרגילי צליל) */
+  /* sname - שם להקראה בלבד (מנוקד כדי שהקול יהגה נכון, לא מוצג על המסך);
+     sg - קבוצת צליל: אותיות באותה קבוצה נשמעות דומה ולא ישמשו כמסיחים זו של זו */
   const LETTERS = [
-    { ch: 'א', sname: 'אָלֶף', sg: 'אע', kws: [{ w: 'אריה', e: '🦁' }, { w: 'אבטיח', e: '🍉' }] },
-    { ch: 'ב', sname: 'בֵּית', sg: 'בו', kws: [{ w: 'בננה', e: '🍌' }, { w: 'בלון', e: '🎈' }] },
-    { ch: 'ג', sname: 'גִימֶל', sg: null, kws: [{ w: 'גלידה', e: '🍦' }, { w: 'גמל', e: '🐫' }] },
-    { ch: 'ד', sname: 'דָלֶת', sg: null, kws: [{ w: 'דג', e: '🐟' }, { w: 'דבורה', e: '🐝' }] },
-    { ch: 'ה', sname: 'הֵא', sg: null, kws: [{ w: 'הר', e: '⛰️' }, { w: 'היפופוטם', e: '🦛' }] },
-    { ch: 'ו', sname: 'וָאו', sg: 'בו', kws: [{ w: 'ורד', e: '🌹' }, { w: 'וופל', e: '🧇' }] },
-    { ch: 'ז', sname: 'זַיִן', sg: null, kws: [{ w: 'זברה', e: '🦓' }, { w: 'זית', e: '🫒' }] },
-    { ch: 'ח', sname: 'חֵית', sg: 'כק', kws: [{ w: 'חתול', e: '🐱' }, { w: 'חלב', e: '🥛' }] },
-    { ch: 'ט', sname: 'טֵית', sg: 'טת', kws: [{ w: 'טרקטור', e: '🚜' }, { w: 'טלפון', e: '📱' }] },
-    { ch: 'י', sname: 'יוֹד', sg: null, kws: [{ w: 'ילד', e: '👦' }, { w: 'ירח', e: '🌙' }] },
-    { ch: 'כ', sname: 'כָּף', sg: 'כק', final: 'ך', kws: [{ w: 'כדור', e: '⚽' }, { w: 'כלב', e: '🐶' }] },
-    { ch: 'ל', sname: 'לָמֶד', sg: null, kws: [{ w: 'לב', e: '❤️' }, { w: 'לימון', e: '🍋' }] },
-    { ch: 'מ', sname: 'מֵם', sg: null, final: 'ם', kws: [{ w: 'מים', e: '💧' }, { w: 'מטוס', e: '✈️' }] },
-    { ch: 'נ', sname: 'נוּן', sg: null, final: 'ן', kws: [{ w: 'נחש', e: '🐍' }, { w: 'נר', e: '🕯️' }] },
-    { ch: 'ס', sname: 'סָמֶך', sg: 'סש', kws: [{ w: 'סוס', e: '🐴' }, { w: 'ספר', e: '📖' }] },
-    { ch: 'ע', sname: 'עַיִן', sg: 'אע', kws: [{ w: 'ענן', e: '☁️' }, { w: 'עץ', e: '🌳' }] },
-    { ch: 'פ', sname: 'פֵּא', sg: null, final: 'ף', kws: [{ w: 'פיל', e: '🐘' }, { w: 'פרח', e: '🌸' }] },
-    { ch: 'צ', sname: 'צָדִי', sg: null, final: 'ץ', kws: [{ w: 'צב', e: '🐢' }, { w: 'ציפור', e: '🐦' }] },
-    { ch: 'ק', sname: 'קוֹף', sg: 'כק', kws: [{ w: 'קוף', e: '🐵' }, { w: 'קשת', e: '🌈' }] },
-    { ch: 'ר', sname: 'רֵישׁ', sg: null, kws: [{ w: 'רכבת', e: '🚂' }, { w: 'רובוט', e: '🤖' }] },
-    { ch: 'ש', sname: 'שִׁין', sg: 'סש', kws: [{ w: 'שמש', e: '☀️' }, { w: 'שעון', e: '⌚' }] },
-    { ch: 'ת', sname: 'תָּיו', sg: 'טת', kws: [{ w: 'תפוח', e: '🍎' }, { w: 'תות', e: '🍓' }] }
+    { ch: 'א', sname: 'אָלֶף', sg: 'אעה' },
+    { ch: 'ב', sname: 'בֵּית', sg: 'בו' },
+    { ch: 'ג', sname: 'גִימֶל', sg: null },
+    { ch: 'ד', sname: 'דָלֶת', sg: null },
+    { ch: 'ה', sname: 'הֵא', sg: 'אעה' },
+    { ch: 'ו', sname: 'וָאו', sg: 'בו' },
+    { ch: 'ז', sname: 'זַיִן', sg: null },
+    { ch: 'ח', sname: 'חֵית', sg: 'כקח' },
+    { ch: 'ט', sname: 'טֵית', sg: 'טת' },
+    { ch: 'י', sname: 'יוֹד', sg: null },
+    { ch: 'כ', sname: 'כָּף', sg: 'כקח', final: 'ך' },
+    { ch: 'ל', sname: 'לָמֶד', sg: null },
+    { ch: 'מ', sname: 'מֵם', sg: null, final: 'ם' },
+    { ch: 'נ', sname: 'נוּן', sg: null, final: 'ן' },
+    { ch: 'ס', sname: 'סָמֶך', sg: 'סש' },
+    { ch: 'ע', sname: 'עַיִן', sg: 'אעה' },
+    { ch: 'פ', sname: 'פֵּא', sg: null, final: 'ף' },
+    { ch: 'צ', sname: 'צָדִי', sg: null, final: 'ץ' },
+    { ch: 'ק', sname: 'קוֹף', sg: 'כקח' },
+    { ch: 'ר', sname: 'רֵישׁ', sg: null },
+    { ch: 'ש', sname: 'שִׁין', sg: 'סש' },
+    { ch: 'ת', sname: 'תָּיו', sg: 'טת' }
   ];
 
   const byChar = {};
   LETTERS.forEach(L => { byChar[L.ch] = L; });
   const ALL_CHARS = LETTERS.map(L => L.ch);
 
-  const FINALS = [
-    { reg: 'כ', fin: 'ך' }, { reg: 'מ', fin: 'ם' }, { reg: 'נ', fin: 'ן' },
-    { reg: 'פ', fin: 'ף' }, { reg: 'צ', fin: 'ץ' }
-  ];
-  const finToReg = {}; FINALS.forEach(f => { finToReg[f.fin] = f.reg; });
+  const FINALS = LETTERS.filter(L => L.final).map(L => ({ reg: L.ch, fin: L.final }));
+  const finToReg = {};
+  FINALS.forEach(f => { finToReg[f.fin] = f.reg; });
+
+  /* האותיות כפי שהן נראות בסוף מילה (כ←ך, מ←ם...) - המסיחים לאות הסוגרת */
+  const END_CHARS = LETTERS.map(L => L.final || L.ch);
+
+  const regOf = ch => finToReg[ch] || ch;
+  const sgOf = ch => (byChar[regOf(ch)] || {}).sg || null;
+  /* האם שתי אותיות נשמעות אותו דבר (כולל אות וצורתה הסופית) */
+  const sameSound = (a, b) => regOf(a) === regOf(b) || (!!sgOf(a) && sgOf(a) === sgOf(b));
+
+  /* שם האות להקראה: "מֵם", ולצורה סופית - "מֵם סופית" */
+  const letterName = ch => finToReg[ch] ? byChar[finToReg[ch]].sname + ' סופית' : byChar[ch].sname;
 
   /* אותיות דומות חזותית - לרמת "אותיות דומות" ולמסיחים בתרגילי כתיב */
   const LOOKALIKE = {
@@ -85,154 +116,217 @@ const LettersLevels = (() => {
     'מ': ['ט', 'ס'], 'ט': ['מ', 'ס'], 'ס': ['מ', 'ט'], 'ע': ['צ', 'ש'],
     'צ': ['ע', 'ז'], 'פ': ['ב', 'כ'], 'ק': ['ר', 'ה'], 'ש': ['ע', 'ת']
   };
+  const LOOK_KEYS = Object.keys(LOOKALIKE);
 
-  /* בחירת אותיות מסיחות: בלי התשובה, ובתרגילי צליל - גם בלי אותיות שנשמעות כמוה */
-  function distractorLetters(answer, count, { pool = ALL_CHARS, soundSafe = false, preferLookalikes = false } = {}) {
-    const ansBase = finToReg[answer] || answer;
-    const ansSg = byChar[ansBase] ? byChar[ansBase].sg : null;
-    const ok = ch => {
-      const base = finToReg[ch] || ch;
-      if (base === ansBase) return false;
-      if (soundSafe && ansSg && byChar[base] && byChar[base].sg === ansSg) return false;
-      return true;
-    };
+  /* בחירת אותיות מסיחות: בלי התשובה ובלי אותיות שנשמעות כמוה */
+  function distractorLetters(answer, count, { pool = ALL_CHARS, lookalikes = false } = {}) {
     const out = [];
-    if (preferLookalikes && LOOKALIKE[ansBase]) {
-      for (const ch of shuffle(LOOKALIKE[ansBase])) {
-        if (out.length < count && ok(ch) && !out.includes(ch)) out.push(ch);
-      }
-    }
-    for (const ch of shuffle(pool)) {
+    const add = ch => {
+      if (out.length < count && !sameSound(ch, answer) && !out.includes(ch)) out.push(ch);
+    };
+    if (lookalikes) shuffle(LOOKALIKE[regOf(answer)] || []).forEach(add);
+    shuffle(pool).forEach(add);
+    return out;
+  }
+
+  /* ─── מאגר המילים ─── */
+  /* w - המילה בכתיב מלא (בלי ניקוד), e - אמוג'י (ייחודי לכל מילה!),
+     syl - מספר הברות (null = לא חד-משמעי, לא ישמש בתרגילי הברות),
+     kw - מילת מפתח ללימוד האות הראשונה שלה (רמות 1-6).
+     מילים של 5 אותיות ומעלה משמשות רק לתרגילי צליל והברות, לא לקריאה ובנייה. */
+  const W = (w, e, syl, kw) => ({ w, e, syl, kw: !!kw });
+  const WORDS = [
+    // ── שתי אותיות ──
+    W('דג', '🐟', 1, 1), W('יד', '✋', 1, 1), W('לב', '❤️', 1, 1), W('הר', '⛰️', 1, 1),
+    W('עץ', '🌳', 1, 1), W('אש', '🔥', 1), W('פה', '👄', 1), W('אף', '👃', 1),
+    W('צב', '🐢', 1, 1), W('נר', '🕯️', 1, 1), W('כד', '🏺', 1), W('שן', '🦷', 1, 1),
+    W('עז', '🐐', 1), W('כף', '🥄', 1), W('סל', '🧺', 1), W('ים', '🌊', 1, 1),
+    W('עט', '🖊️', 1), W('תה', '🍵', 1), W('זר', '💐', 1, 1), W('פח', '🗑️', 1),
+    // ── שלוש אותיות ──
+    W('דוב', '🐻', 1, 1), W('סוס', '🐴', 1, 1), W('קוף', '🐵', 1, 1), W('פיל', '🐘', 1, 1),
+    W('תות', '🍓', 1, 1), W('מיץ', '🧃', 1), W('תיק', '🎒', 1, 1), W('תוף', '🥁', 1),
+    W('כלב', '🐶', 2, 1), W('ילד', '👦', 2, 1), W('פרח', '🌸', 2, 1), W('מים', '💧', 2, 1),
+    W('שמש', '☀️', 2, 1), W('נחש', '🐍', 2, 1), W('ספר', '📖', 2, 1), W('גמל', '🐫', 2, 1),
+    W('דגל', '🚩', 2), W('בית', '🏠', 2, 1), W('עין', '👁️', 2, 1), W('רגל', '🦵', 2, 1),
+    W('נעל', '👟', 2, 1), W('דלת', '🚪', 2, 1), W('ענן', '☁️', 2, 1), W('ירח', '🌙', null, 1),
+    W('לחם', '🍞', 2, 1), W('גזר', '🥕', 2, 1), W('ורד', '🌹', 2, 1), W('חלב', '🥛', 2, 1),
+    W('פרה', '🐄', 2, 1), W('כבש', '🐑', 2), W('נמר', '🐯', 2, 1), W('זאב', '🐺', 2, 1),
+    W('אגס', '🍐', 2, 1), W('מלך', '🤴', 2, 1), W('כתר', '👑', 2, 1), W('גשם', '🌧️', 2),
+    W('שלג', '❄️', 2, 1), W('קשת', '🌈', 2, 1), W('עלה', '🍃', 2), W('ברק', '⚡', 2),
+    W('דקל', '🌴', 2), W('סבא', '👴', 2), W('אבא', '👨', 2), W('אמא', '👩', 2),
+    W('פיה', '🧚', 2), W('גרב', '🧦', 2), W('מפה', '🗺️', 2), W('קפה', '☕', 2, 1),
+    W('מרק', '🍲', 2), W('עצם', '🦴', 2), W('דבש', '🍯', null),
+    // ── ארבע אותיות ──
+    W('כוכב', '⭐', 2, 1), W('בלון', '🎈', 2, 1), W('אריה', '🦁', 2, 1), W('חתול', '🐱', 2, 1),
+    W('בננה', '🍌', 3, 1), W('רכבת', '🚂', 3, 1), W('פרפר', '🦋', 2, 1), W('כובע', '🧢', 2, 1),
+    W('שעון', '⌚', 2, 1), W('עוגה', '🎂', 2, 1), W('תפוח', '🍎', null, 1), W('מפתח', '🔑', null, 1),
+    W('אוזן', '👂', 2), W('אוטו', '🚗', 2, 1), W('מטוס', '✈️', 2, 1), W('מתנה', '🎁', 3, 1),
+    W('ליצן', '🤡', 2, 1), W('כדור', '⚽', 2, 1), W('טווס', '🦚', 2, 1), W('תוכי', '🦜', 2, 1),
+    W('תנין', '🐊', 2), W('ארנב', '🐰', 2), W('עכבר', '🐭', 2, 1), W('חזיר', '🐷', 2, 1),
+    W('שועל', '🦊', 2, 1), W('זברה', '🦓', 2, 1), W('פנדה', '🐼', 2), W('קרנף', '🦏', 2),
+    W('כריש', '🦈', 2), W('סרטן', '🦀', 2), W('נמלה', '🐜', 3), W('לטאה', '🦎', 3),
+    W('עטלף', '🦇', 3), W('תפוז', '🍊', 2), W('תירס', '🌽', 2), W('פיצה', '🍕', 2, 1),
+    W('ביצה', '🥚', 2), W('אורז', '🍚', 2), W('אגוז', '🥜', 2), W('פלפל', '🌶️', 2),
+    W('מיטה', '🛏️', 2), W('שמלה', '👗', 2), W('כפפה', '🧤', null), W('טבעת', '💍', 3, 1),
+    W('דובי', '🧸', 2), W('פאזל', '🧩', 2), W('סבון', '🧼', 2, 1), W('מגנט', '🧲', 2),
+    W('סירה', '⛵', 2, 1), W('מסוק', '🚁', 2), W('רקטה', '🚀', 3, 1), W('ילדה', '👧', 2),
+    W('לשון', '👅', 2), W('מחשב', '💻', 2), W('מלכה', '👸', 2), W('סבתא', '👵', 2),
+    W('שוטר', '👮', 2), W('וופל', '🧇', 2, 1),
+    // ── מילים ארוכות (5+): רק לתרגילי צליל, תמונות והברות ──
+    W('טלפון', '📱', 3, 1), W('חולצה', '👕', 2, 1), W('אבטיח', '🍉', null, 1), W('גלידה', '🍦', null, 1),
+    W('ברווז', '🦆', 2, 1), W('דבורה', '🐝', null, 1), W('היפופוטם', '🦛', null, 1), W('המבורגר', '🍔', 3, 1),
+    W('טרקטור', '🚜', null, 1), W('לימון', '🍋', 2, 1), W('ציפור', '🐦', 2, 1), W('צפרדע', '🐸', null, 1),
+    W('קקטוס', '🌵', 2, 1), W('קיפוד', '🦔', 2, 1), W('רובוט', '🤖', 2, 1), W('גיטרה', '🎸', 3, 1),
+    W('ינשוף', '🦉', 2), W('עכביש', '🕷️', 3), W('תמנון', '🐙', 3), W('תרנגול', '🐓', 3),
+    W('דולפין', '🐬', 2), W('קואלה', '🐨', 3), W('חילזון', '🐌', 3), W('ענבים', '🍇', 3),
+    W('אפרסק', '🍑', 3), W('גבינה', '🧀', null), W('שוקולד', '🍫', 3), W('מנורה', '💡', 3),
+    W('מזוודה', '🧳', 3), W('מטרייה', '☂️', 3), W('מצלמה', '📷', 3), W('מנעול', '🔒', 2),
+    W('פעמון', '🔔', 3), W('מטאטא', '🧹', 3), W('ספינה', '🚢', null), W('משאית', '🚚', 3),
+    W('כבאית', '🚒', 3), W('אוטובוס', '🚌', 3), W('מכשפה', '🧙', 3), W('תינוק', '👶', 2),
+    W('פסנתר', '🎹', null), W('עיפרון', '✏️', 3), W('פופקורן', '🍿', 2), W('מלפפון', '🥒', null),
+    W('עגבנייה', '🍅', null), W('פטרייה', '🍄', null)
+  ];
+
+  WORDS.forEach(w => {
+    w.u = [...w.w];             // אותיות המילה, אחת-אחת
+    w.len = w.u.length;
+    w.first = w.u[0];
+    w.last = w.u[w.len - 1];
+    w.xl = w.len >= 5;          // ארוכה: לא לקריאה ובנייה
+  });
+
+  const wordOf = str => WORDS.find(x => x.w === str) || null;
+
+  /* ─── מאגרים לפי שימוש ─── */
+  const BY_FIRST = {}, BY_LAST = {};
+  WORDS.forEach(w => {
+    (BY_FIRST[w.first] = BY_FIRST[w.first] || []).push(w);
+    (BY_LAST[w.last] = BY_LAST[w.last] || []).push(w);
+  });
+  const startingWith = ch => BY_FIRST[ch] || [];
+  const endingWith = ch => BY_LAST[ch] || [];
+
+  /* מילות המפתח של כל אות (הקצרות קודם - הן הפשוטות ביותר) */
+  LETTERS.forEach(L => {
+    L.kws = startingWith(L.ch).filter(w => w.kw).sort((a, b) => a.len - b.len);
+  });
+
+  const wordsByLen = n => WORDS.filter(w => w.len === n);
+  const LEN2 = wordsByLen(2), LEN3 = wordsByLen(3), LEN4 = wordsByLen(4);
+  const LEN23 = [...LEN2, ...LEN3], LEN34 = [...LEN3, ...LEN4];
+
+  const LAST_PLAIN = WORDS.filter(w => !finToReg[w.last]);   // נגמרות באות רגילה
+  const LAST_FINAL = WORDS.filter(w => finToReg[w.last]);    // נגמרות באות סופית
+
+  const SYL_WORDS = WORDS.filter(w => w.syl);
+  const SYL_BY_N = { 1: SYL_WORDS.filter(w => w.syl === 1), 2: SYL_WORDS.filter(w => w.syl === 2), 3: SYL_WORDS.filter(w => w.syl === 3) };
+  const SYL_HARD = SYL_WORDS.filter(w => w.len >= 3);
+
+  const START_POOL = ALL_CHARS.filter(ch => startingWith(ch).length >= 2);
+  const END_POOL = END_CHARS.filter(ch => endingWith(ch).length >= 2);
+  const SAME_START_WORDS = WORDS.filter(w => startingWith(w.first).length >= 2);
+  const FINAL_COMBOS = [];
+  FINALS.forEach(f => { FINAL_COMBOS.push({ pair: f, showFinal: true }, { pair: f, showFinal: false }); });
+
+  /* מילים מסיחות לפי צליל: האות (הראשונה/האחרונה) שלהן לא נשמעת כמו האות
+     המבוקשת, ולא כמו זו של מסיח אחר (בשביל מגוון), ותמונה שונה */
+  function wordDistractorsBySound(ch, where, count, exclude) {
+    const at = w => (where === 'first' ? w.first : w.last);
+    const out = [];
+    for (const w of shuffle(WORDS)) {
       if (out.length >= count) break;
-      if (ok(ch) && !out.includes(ch)) out.push(ch);
+      if (exclude.includes(w) || exclude.some(x => x.e === w.e)) continue;
+      if (sameSound(at(w), ch)) continue;
+      if (out.some(x => x.e === w.e || sameSound(at(x), at(w)))) continue;
+      out.push(w);
     }
     return out;
   }
 
-  /* ─── מאגר המילים (מנוקד + הגייה פשוטה + אמוג'י + הברות) ─── */
-  /* syl:null = לא חד-משמעי למחיאות כפיים, לא ישמש ברמת ההברות */
-  const WORDS = [
-    // שתי אותיות
-    { w: 'דָּג', p: 'דג', e: '🐟', syl: 1 },
-    { w: 'יָד', p: 'יד', e: '✋', syl: 1 },
-    { w: 'לֵב', p: 'לב', e: '❤️', syl: 1 },
-    { w: 'הַר', p: 'הר', e: '⛰️', syl: 1 },
-    { w: 'עֵץ', p: 'עץ', e: '🌳', syl: 1 },
-    { w: 'אֵשׁ', p: 'אש', e: '🔥', syl: 1 },
-    { w: 'פֶּה', p: 'פה', e: '👄', syl: 1 },
-    { w: 'אַף', p: 'אף', e: '👃', syl: 1 },
-    { w: 'צָב', p: 'צב', e: '🐢', syl: 1 },
-    { w: 'נֵר', p: 'נר', e: '🕯️', syl: 1 },
-    { w: 'דֹּב', p: 'דוב', e: '🐻', syl: 1 },
-    { w: 'כַּד', p: 'כד', e: '🏺', syl: 1 },
-    // שלוש אותיות
-    { w: 'סוּס', p: 'סוס', e: '🐴', syl: 1 },
-    { w: 'קוֹף', p: 'קוף', e: '🐵', syl: 1 },
-    { w: 'פִּיל', p: 'פיל', e: '🐘', syl: 1 },
-    { w: 'תּוּת', p: 'תות', e: '🍓', syl: 1 },
-    { w: 'כֶּלֶב', p: 'כלב', e: '🐶', syl: 2 },
-    { w: 'יֶלֶד', p: 'ילד', e: '👦', syl: 2 },
-    { w: 'פֶּרַח', p: 'פרח', e: '🌸', syl: 2 },
-    { w: 'מַיִם', p: 'מים', e: '💧', syl: 2 },
-    { w: 'שֶׁמֶשׁ', p: 'שמש', e: '☀️', syl: 2 },
-    { w: 'נָחָשׁ', p: 'נחש', e: '🐍', syl: 2 },
-    { w: 'סֵפֶר', p: 'ספר', e: '📖', syl: 2 },
-    { w: 'גָּמָל', p: 'גמל', e: '🐫', syl: 2 },
-    { w: 'דֶּגֶל', p: 'דגל', e: '🚩', syl: 2 },
-    { w: 'בַּיִת', p: 'בית', e: '🏠', syl: 2 },
-    { w: 'עַיִן', p: 'עין', e: '👁️', syl: 2 },
-    { w: 'אֹזֶן', p: 'אוזן', e: '👂', syl: 2 },
-    { w: 'רֶגֶל', p: 'רגל', e: '🦵', syl: 2 },
-    { w: 'נַעַל', p: 'נעל', e: '👟', syl: 2 },
-    { w: 'דֶּלֶת', p: 'דלת', e: '🚪', syl: 2 },
-    { w: 'עָנָן', p: 'ענן', e: '☁️', syl: 2 },
-    // ארבע אותיות
-    { w: 'כּוֹכָב', p: 'כוכב', e: '⭐', syl: 2 },
-    { w: 'בָּלוֹן', p: 'בלון', e: '🎈', syl: 2 },
-    { w: 'אַרְיֵה', p: 'אריה', e: '🦁', syl: 2 },
-    { w: 'חָתוּל', p: 'חתול', e: '🐱', syl: 2 },
-    { w: 'בָּנָנָה', p: 'בננה', e: '🍌', syl: 3 },
-    { w: 'רַכֶּבֶת', p: 'רכבת', e: '🚂', syl: 3 },
-    { w: 'פַּרְפַּר', p: 'פרפר', e: '🦋', syl: 2 },
-    { w: 'כּוֹבַע', p: 'כובע', e: '🧢', syl: 2 },
-    { w: 'שָׁעוֹן', p: 'שעון', e: '⌚', syl: 2 },
-    { w: 'עוּגָה', p: 'עוגה', e: '🎂', syl: 2 },
-    { w: 'תַּפּוּחַ', p: 'תפוח', e: '🍎', syl: null },
-    { w: 'מַפְתֵּחַ', p: 'מפתח', e: '🔑', syl: null },
-    { w: 'חַלּוֹן', p: 'חלון', e: '🪟', syl: 2 },
-    // מילים ארוכות - רק לתרגילי צליל והברות
-    { w: 'אַרְנֶבֶת', p: 'ארנבת', e: '🐰', syl: 3, xl: true },
-    { w: 'שׁוֹקוֹלָד', p: 'שוקולד', e: '🍫', syl: 3, xl: true },
-    { w: 'מִטְרִיָּה', p: 'מטריה', e: '☂️', syl: 3, xl: true }
-  ];
-
-  WORDS.forEach(W => {
-    W.u = splitUnits(W.w);
-    W.len = W.u.length;
-    W.first = baseOf(W.u[0]);
-    W.last = baseOf(W.u[W.len - 1]);
-  });
-
-  const wordsByLen = n => WORDS.filter(W => W.len === n && !W.xl);
-
-  /* ─── ניקוד ─── */
-  const VOWELS = {
-    kamatz: { mark: 'ָ', name: 'קמץ', shape: 'קו קטן עם רגל מתחת לאות', sound: 'a' },
-    patach: { mark: 'ַ', name: 'פתח', shape: 'קו ישר מתחת לאות', sound: 'a' },
-    chirik: { mark: 'ִ', name: 'חיריק', shape: 'נקודה אחת קטנה מתחת לאות', sound: 'i' },
-    cholam: { suffix: 'וֹ', name: 'חולם', shape: 'האות וו עם נקודה למעלה', sound: 'o' },
-    segol: { mark: 'ֶ', name: 'סגול', shape: 'שלוש נקודות מתחת לאות', sound: 'e' },
-    tsere: { mark: 'ֵ', name: 'צירה', shape: 'שתי נקודות מתחת לאות', sound: 'e' },
-    shuruk: { suffix: 'וּ', name: 'שורוק', shape: 'האות וו עם נקודה באמצע', sound: 'u' }
-  };
-
-  /* אותיות נוחות לתרגילי הברה (בלי אותיות שקטות וכפולות-צליל) */
-  const SYL_LETTERS = [
-    { glyph: 'בּ', plain: 'ב' }, { glyph: 'ג', plain: 'ג' }, { glyph: 'ד', plain: 'ד' },
-    { glyph: 'ל', plain: 'ל' }, { glyph: 'מ', plain: 'מ' }, { glyph: 'נ', plain: 'נ' },
-    { glyph: 'ס', plain: 'ס' }, { glyph: 'ק', plain: 'ק' }, { glyph: 'ר', plain: 'ר' },
-    { glyph: 'שׁ', plain: 'ש' }, { glyph: 'תּ', plain: 'ת' }
-  ];
-
-  const syllGlyph = (L, v) => v.suffix ? L.glyph + v.suffix : L.glyph + v.mark;
-  /* איות שנשמע נכון בהקראה: בָּ←"בה", בִּ←"בי", בּוֹ←"בו" */
-  const HELPER = { a: 'ה', i: 'י', o: 'ו' };
-  const syllSpeech = (L, v) => L.plain + (HELPER[v.sound] || '');
+  /* מסיחי תמונות לקריאת מילה: מעדיפים מילים שמתחילות באותה אות */
+  function wordDistractors(w, count, poolLens) {
+    const pool = WORDS.filter(x => x !== w && x.e !== w.e && poolLens.includes(x.len));
+    const sameFirst = pool.filter(x => x.first === w.first);
+    const other = pool.filter(x => x.first !== w.first);
+    const out = [];
+    for (const x of shuffle(sameFirst)) if (out.length < Math.min(count - 1, 2)) out.push(x);
+    for (const x of shuffle(other)) if (out.length < count && !out.includes(x)) out.push(x);
+    for (const x of shuffle(pool)) if (out.length < count && !out.includes(x)) out.push(x);
+    return out.slice(0, count);
+  }
 
   /* ─── בוני תרגילים ─── */
+  /* כל תרגיל: kind (pick/build), type (לבדיקות), key (למניעת חזרות במנוע),
+     prompt (טקסט על המסך - בלי המילה!), speech (הקראה), hint, revealSpeech,
+     answer, options, visual, word */
 
   const REVEAL_LETTER = 'התשובה הנכונה מהבהבת! לחץ עליה ונמשיך.';
+  const SYL_HE = { 1: 'הברה אחת', 2: 'שתי הברות', 3: 'שלוש הברות' };
+  const namesOf = ws => ws.map(x => x.w).join(', ');
 
-  /* מצא אות לפי מילת מפתח (רמות 1-6) */
-  function qFindLetter(letterCh, pool, optCount, { preferLookalikes = false } = {}) {
-    const L = byChar[letterCh];
-    const kw = pick(L.kws);
-    const distract = distractorLetters(letterCh, optCount - 1, { pool, preferLookalikes });
+  /* מצא את האות של מילת מפתח (רמות 1-6) */
+  function qFindLetter(ch, pool, optCount, { lookalikes = false } = {}) {
+    const w = draw('kw:' + ch, byChar[ch].kws);
     return {
-      kind: 'pick',
+      kind: 'pick', type: 'find', key: `first:${w.w}`,
       optStyle: 'letter',
-      prompt: `מצא את האות של "${kw.w}"`,
-      speech: `מצא את האות של ${kw.w}! ${kw.w}.`,
-      hint: `תגיד לאט: ${kw.w}. איזה צליל שומעים בהתחלה? חפש את האות שלו.`,
+      prompt: 'באיזו אות מתחילה המילה?',
+      speech: `מצא את האות של ${w.w}! ${w.w}.`,
+      hint: `תגיד לאט: ${w.w}. איזה צליל שומעים בהתחלה? חפש את האות שלו.`,
       revealSpeech: REVEAL_LETTER,
-      answer: letterCh,
-      options: shuffle([letterCh, ...distract]),
-      visual: { type: 'emoji', e: kw.e }
+      answer: ch,
+      options: shuffle([ch, ...distractorLetters(ch, optCount - 1, { pool, lookalikes })]),
+      visual: { type: 'emoji', e: w.e },
+      word: w
     };
   }
 
-  /* אותיות סופיות (רמה 7) */
-  function qFinal(pair, showFinal) {
+  /* האות הפותחת */
+  function qFirst(w, optCount = 4) {
+    return {
+      kind: 'pick', type: 'first', key: `first:${w.w}`,
+      optStyle: 'letter',
+      prompt: 'באיזו אות מתחילה המילה?',
+      speech: `באיזו אות מתחילה המילה ${w.w}? תגיד לאט: ${w.w}.`,
+      hint: `תגיד ${w.w} לאט לאט, ותעצור אחרי הצליל הראשון. חפש את האות שלו.`,
+      revealSpeech: REVEAL_LETTER,
+      answer: w.first,
+      options: shuffle([w.first, ...distractorLetters(w.first, optCount - 1)]),
+      visual: { type: 'emoji', e: w.e },
+      word: w
+    };
+  }
+
+  /* האות הסוגרת (המסיחים בצורת סוף-מילה: ך ם ן ף ץ) */
+  function qLast(w, optCount = 4) {
+    const isFinal = !!finToReg[w.last];
+    return {
+      kind: 'pick', type: 'last', key: `last:${w.w}`,
+      optStyle: 'letter',
+      prompt: 'באיזו אות נגמרת המילה?',
+      speech: `באיזו אות נגמרת המילה ${w.w}? תקשיב עד הסוף: ${w.w}.`,
+      hint: `תגיד ${w.w} לאט לאט, ותקשיב טוב לצליל האחרון.` +
+        (isFinal ? ' זכור: בסוף מילה יש אותיות עם צורה מיוחדת!' : ''),
+      revealSpeech: REVEAL_LETTER,
+      answer: w.last,
+      options: shuffle([w.last, ...distractorLetters(w.last, optCount - 1, { pool: END_CHARS })]),
+      visual: { type: 'emoji', e: w.e },
+      word: w
+    };
+  }
+
+  /* אותיות סופיות: זיהוי הזוג (רגילה ↔ סופית) */
+  function qFinalPair({ pair, showFinal }) {
     const answer = showFinal ? pair.reg : pair.fin;
     const optionsPool = showFinal ? FINALS.map(f => f.reg) : FINALS.map(f => f.fin);
     const distract = shuffle(optionsPool.filter(x => x !== answer)).slice(0, 3);
     return {
-      kind: 'pick',
+      kind: 'pick', type: 'final', key: `final:${pair.reg}:${showFinal ? 'f' : 'r'}`,
       optStyle: 'letter',
       prompt: showFinal ? 'של איזו אות הצורה הסופית הזאת?' : 'מצא את הצורה הסופית!',
       speech: showFinal
-        ? 'האות הזאת היא צורה סופית, שבאה רק בסוף מילה. של איזו אות רגילה היא? הן דומות!'
-        : 'לאות הזאת יש צורה מיוחדת שבאה בסוף מילה. מצא אותה! הן דומות!',
+        ? `זאת ${letterName(pair.fin)}, שבאה רק בסוף מילה. של איזו אות רגילה היא? הן דומות!`
+        : `זאת האות ${letterName(pair.reg)}. בסוף מילה יש לה צורה מיוחדת. מצא אותה! הן דומות!`,
       hint: 'תסתכל טוב על הצורה: האות הסופית דומה מאוד לאות הרגילה שלה.',
       revealSpeech: REVEAL_LETTER,
       answer,
@@ -241,174 +335,173 @@ const LettersLevels = (() => {
     };
   }
 
-  /* הצליל הפותח / הסוגר (רמות 8-9) */
-  function qSound(W, where) {
-    const first = where === 'first';
-    const answer = first ? W.first : W.last;
-    const isFinalGlyph = !!finToReg[answer];
-    const pool = isFinalGlyph ? FINALS.map(f => f.fin) : ALL_CHARS;
-    const distract = distractorLetters(answer, 3, { pool, soundSafe: true });
+  /* הברות: כמה חלקים יש במילה */
+  function qSyllables(w) {
     return {
-      kind: 'pick',
-      optStyle: 'letter',
-      prompt: first ? `באיזו אות מתחילה המילה "${W.p}"?` : `באיזו אות נגמרת המילה "${W.p}"?`,
-      speech: first
-        ? `באיזו אות מתחילה המילה ${W.p}? תגיד לאט: ${W.p}.`
-        : `באיזו אות נגמרת המילה ${W.p}? תקשיב עד הסוף: ${W.p}.`,
-      hint: first
-        ? `תגיד ${W.p} לאט לאט, ותעצור אחרי הצליל הראשון.`
-        : `תגיד ${W.p} לאט לאט, ותקשיב טוב לצליל האחרון.`,
-      revealSpeech: REVEAL_LETTER,
-      answer,
-      options: shuffle([answer, ...distract]),
-      visual: { type: 'emoji', e: W.e }
-    };
-  }
-
-  /* מחיאות כף - הברות (רמה 10) */
-  function qClaps(W) {
-    return {
-      kind: 'pick',
+      kind: 'pick', type: 'syl', key: `syl:${w.w}`,
       optStyle: 'num',
-      prompt: `כמה מחיאות כף יש במילה "${W.p}"? 👏`,
-      speech: `כמה מחיאות כף יש במילה ${W.p}? תגיד את המילה ומחא כפיים: ${W.p}!`,
-      hint: `לחץ על הרמקול לשמוע לאט, מחא כף על כל חלק, וספור: ${W.p}.`,
-      revealSpeech: `במילה ${W.p} יש ${W.syl === 1 ? 'מחיאת כף אחת' : W.syl + ' מחיאות כף'}. לחץ על המספר ${W.syl}!`,
+      prompt: 'כמה הברות יש במילה?',
+      speech: `כמה הברות יש במילה ${w.w}? תגיד אותה לאט, חלק חלק: ${w.w}!`,
+      hint: `לחץ על הרמקול לשמוע לאט. תגיד ${w.w} חלק אחרי חלק, וספור את החלקים.`,
+      revealSpeech: `במילה ${w.w} יש ${SYL_HE[w.syl]}. לחץ על המספר ${w.syl}!`,
       replayRate: 0.6,
-      answer: W.syl,
+      answer: w.syl,
       options: shuffle([1, 2, 3]),
-      visual: { type: 'emoji', e: W.e }
+      visual: { type: 'emoji', e: w.e },
+      word: w
     };
   }
 
-  /* ניקוד לפי צליל (רמות 11-13) */
-  function qVowelSound(vowelKeys, distractKeys) {
-    const L = pick(SYL_LETTERS);
-    const vKey = pick(vowelKeys);
-    const v = VOWELS[vKey];
-    const answer = syllGlyph(L, v);
-    const options = shuffle([answer, ...shuffle(distractKeys.filter(k => k !== vKey))
-      .slice(0, 2).map(k => syllGlyph(L, VOWELS[k]))]);
-    const sound = syllSpeech(L, v);
+  /* הפוך: רואים אות, מוצאים תמונה שהמילה שלה מתחילה בה */
+  function qStartsWith(ch) {
+    const w = draw('sw:' + ch, startingWith(ch));
+    const opts = shuffle([w, ...wordDistractorsBySound(ch, 'first', 2, [w])]);
+    const name = letterName(ch);
     return {
-      kind: 'pick',
-      optStyle: 'letter',
-      prompt: 'מצא את הצליל ששומעים 🔊',
-      speech: `מצא את ${sound}! תקשיב שוב: ${sound}.`,
-      hint: `${v.name} זה ${v.shape}. חפש את ${sound}.`,
-      revealSpeech: 'הצליל הנכון מהבהב! לחץ עליו ונמשיך.',
-      answer,
-      options,
-      visual: null
+      kind: 'pick', type: 'startsWith', key: `sw:${w.w}`,
+      optStyle: 'emoji',
+      prompt: 'איזו תמונה מתחילה באות הזאת?',
+      speech: `הנה האות ${name}. איזו תמונה מתחילה באות ${name}? ${namesOf(opts)}.`,
+      hint: `תגיד את השם של כל תמונה לאט: ${namesOf(opts)}. איזו מהן מתחילה בצליל של ${name}?`,
+      revealSpeech: `המילה ${w.w} מתחילה באות ${name}! לחץ על התמונה של ${w.w}.`,
+      answer: w.e,
+      options: opts.map(x => x.e),
+      visual: { type: 'bigGlyph', text: ch },
+      word: w
     };
   }
 
-  /* ניקוד לפי שם וצורה (רמה 14) */
-  function qVowelName(vowelKeys, allKeys) {
-    const L = pick(SYL_LETTERS);
-    const vKey = pick(vowelKeys);
-    const v = VOWELS[vKey];
-    const answer = syllGlyph(L, v);
-    const distract = shuffle(allKeys.filter(k => k !== vKey)).slice(0, 2)
-      .map(k => syllGlyph(L, VOWELS[k]));
+  /* הפוך: רואים אות (בצורת סוף מילה), מוצאים תמונה שהמילה שלה נגמרת בה */
+  function qEndsWith(ch) {
+    const w = draw('ew:' + ch, endingWith(ch));
+    const opts = shuffle([w, ...wordDistractorsBySound(ch, 'last', 2, [w])]);
+    const name = letterName(ch);
     return {
-      kind: 'pick',
-      optStyle: 'letter',
-      prompt: `מצא את ה${v.name}!`,
-      speech: `מצא את ה${v.name}! ${v.name} זה ${v.shape}.`,
-      hint: `חפש טוב: ${v.name} זה ${v.shape}.`,
-      revealSpeech: `הנה ה${v.name}! הוא מהבהב, לחץ עליו.`,
-      answer,
-      options: shuffle([answer, ...distract]),
-      visual: null
+      kind: 'pick', type: 'endsWith', key: `ew:${w.w}`,
+      optStyle: 'emoji',
+      prompt: 'איזו תמונה נגמרת באות הזאת?',
+      speech: `הנה האות ${name}. איזו תמונה נגמרת באות ${name}? ${namesOf(opts)}.`,
+      hint: `תגיד כל מילה עד הסוף: ${namesOf(opts)}. איזו מהן נגמרת בצליל של ${name}?`,
+      revealSpeech: `המילה ${w.w} נגמרת באות ${name}! לחץ על התמונה של ${w.w}.`,
+      answer: w.e,
+      options: opts.map(x => x.e),
+      visual: { type: 'bigGlyph', text: ch },
+      word: w
     };
   }
 
-  /* מסיחי תמונות לקריאת מילה: מעדיפים מילים שמתחילות באותה אות */
-  function wordDistractors(W, count, poolLens) {
-    const pool = WORDS.filter(x => x.w !== W.w && !x.xl && x.e !== W.e);
-    const sameFirst = pool.filter(x => x.first === W.first && poolLens.includes(x.len));
-    const sameLen = pool.filter(x => x.first !== W.first && poolLens.includes(x.len));
-    const out = [];
-    for (const x of shuffle(sameFirst)) if (out.length < Math.min(count - 1, 2)) out.push(x);
-    for (const x of shuffle(sameLen)) if (out.length < count && !out.includes(x)) out.push(x);
-    for (const x of shuffle(pool)) if (out.length < count && !out.includes(x)) out.push(x);
-    return out.slice(0, count);
+  /* איזו תמונה מתחילה באותה אות כמו התמונה הגדולה */
+  function qSameStart(w) {
+    let mate = draw('ss:' + w.first, startingWith(w.first));
+    if (mate === w) mate = draw('ss:' + w.first, startingWith(w.first));
+    const opts = shuffle([mate, ...wordDistractorsBySound(w.first, 'first', 2, [w, mate])]);
+    const name = letterName(w.first);
+    return {
+      kind: 'pick', type: 'sameStart', key: `ss:${w.w}:${mate.w}`,
+      optStyle: 'emoji',
+      prompt: 'איזו תמונה מתחילה באותה אות?',
+      speech: `${w.w}. איזו תמונה מתחילה באותה אות כמו ${w.w}? ${namesOf(opts)}.`,
+      hint: `המילה ${w.w} מתחילה באות ${name}. תגיד לאט: ${namesOf(opts)}. איזו מהן גם מתחילה באות ${name}?`,
+      revealSpeech: `${w.w} וגם ${mate.w} מתחילות באות ${name}! לחץ על התמונה של ${mate.w}.`,
+      answer: mate.e,
+      options: opts.map(x => x.e),
+      visual: { type: 'emoji', e: w.e },
+      word: mate
+    };
   }
 
-  /* קריאת מילה ← תמונה (רמות 15, 16, 20) */
-  function qReadWord(W, optCount, poolLens) {
-    const kwOfFirst = byChar[W.first] ? pick(byChar[W.first].kws).w : W.p;
-    const distract = wordDistractors(W, optCount - 1, poolLens);
+  /* הפוך: שומעים מספר הברות, מוצאים את התמונה המתאימה */
+  function qSylPick(n) {
+    const ws = [1, 2, 3].map(k => draw('sp:' + k, SYL_BY_N[k]));
+    const w = ws[n - 1];
+    const opts = shuffle(ws);
     return {
-      kind: 'pick',
+      kind: 'pick', type: 'sylPick', key: `sp:${w.w}`,
+      optStyle: 'emoji',
+      prompt: `לאיזו תמונה יש ${SYL_HE[n]}?`,
+      speech: `לאיזו תמונה יש ${SYL_HE[n]}? ${namesOf(opts)}. תגיד כל מילה לאט, וספור את החלקים.`,
+      hint: `תגיד לאט וספור: ${namesOf(opts)}. לאיזו מהן יש ${SYL_HE[n]}?`,
+      revealSpeech: `במילה ${w.w} יש ${SYL_HE[n]}! לחץ על התמונה של ${w.w}.`,
+      replayRate: 0.7,
+      answer: w.e,
+      options: opts.map(x => x.e),
+      visual: { type: 'bigGlyph', text: String(n) },
+      word: w
+    };
+  }
+
+  /* קריאת מילה ← תמונה */
+  function qReadWord(w, optCount, poolLens) {
+    const kwOfFirst = byChar[w.first].kws[0].w;
+    const distract = wordDistractors(w, optCount - 1, poolLens);
+    return {
+      kind: 'pick', type: 'read', key: `read:${w.w}`,
       optStyle: 'emoji',
       prompt: 'קרא את המילה ומצא את התמונה!',
-      speech: 'קרא את המילה שעל המסך, לאט, צליל אחרי צליל. ואז לחץ על התמונה הנכונה!',
+      speech: 'קרא את המילה שעל המסך, לאט, אות אחרי אות. ואז לחץ על התמונה הנכונה!',
       hint: `המילה מתחילה באותה אות כמו ${kwOfFirst}. קרא עוד פעם, לאט.`,
-      revealSpeech: `המילה היא ${W.p}! לחץ על התמונה של ${W.p}.`,
-      answer: W.e,
-      options: shuffle([W.e, ...distract.map(x => x.e)]),
-      visual: { type: 'wordCard', units: W.u },
-      word: W
+      revealSpeech: `המילה היא ${w.w}! לחץ על התמונה של ${w.w}.`,
+      answer: w.e,
+      options: shuffle([w.e, ...distract.map(x => x.e)]),
+      visual: { type: 'wordCard', units: w.u },
+      word: w
     };
   }
 
-  /* תמונה ← מילה כתובה (רמה 17) */
-  function qPickWord(W, optCount, poolLens) {
-    const distract = wordDistractors(W, optCount - 1, poolLens);
-    const kwOfFirst = byChar[W.first] ? pick(byChar[W.first].kws).w : W.p;
+  /* תמונה ← המילה הכתובה */
+  function qPickWord(w, optCount, poolLens) {
+    const distract = wordDistractors(w, optCount - 1, poolLens);
+    const kwOfFirst = byChar[w.first].kws[0].w;
     return {
-      kind: 'pick',
+      kind: 'pick', type: 'pickWord', key: `pw:${w.w}`,
       optStyle: 'word',
-      prompt: `איפה כתוב "${W.p}"?`,
-      speech: `מצא איפה כתוב ${W.p}! קרא את המילים לאט - יש מילים שמנסות לבלבל אותך.`,
-      hint: `${W.p} מתחיל כמו ${kwOfFirst}. אבל שים לב - קרא את כל המילה, לא רק את ההתחלה!`,
-      revealSpeech: `המילה ${W.p} מהבהבת! לחץ עליה.`,
-      answer: W.w,
-      options: shuffle([W.w, ...distract.map(x => x.w)]),
-      visual: { type: 'emoji', e: W.e },
-      word: W
+      prompt: 'איפה כתובה המילה ששמעת?',
+      speech: `מצא איפה כתוב ${w.w}! קרא את המילים לאט - יש מילים שמנסות לבלבל אותך.`,
+      hint: `${w.w} מתחיל כמו ${kwOfFirst}. אבל שים לב - קרא את כל המילה, לא רק את ההתחלה!`,
+      revealSpeech: `המילה ${w.w} מהבהבת! לחץ עליה.`,
+      answer: w.w,
+      options: shuffle([w.w, ...distract.map(x => x.w)]),
+      visual: { type: 'emoji', e: w.e },
+      word: w
     };
   }
 
-  /* האות החסרה (רמה 18) */
-  function qMissing(W) {
-    const idx = ri(0, W.len - 1);
-    const answer = baseOf(W.u[idx]);
-    const isFinalGlyph = !!finToReg[answer];
-    const pool = isFinalGlyph ? FINALS.map(f => f.fin) : ALL_CHARS;
-    const distract = distractorLetters(answer, 3, { pool, soundSafe: true, preferLookalikes: !isFinalGlyph });
+  /* האות החסרה */
+  function qMissing(w) {
+    const idx = ri(0, w.len - 1);
+    const answer = w.u[idx];
+    const atEnd = idx === w.len - 1;
+    const distract = distractorLetters(answer, 3, { pool: atEnd ? END_CHARS : ALL_CHARS, lookalikes: !atEnd });
     return {
-      kind: 'pick',
+      kind: 'pick', type: 'missing', key: `miss:${w.w}:${idx}`,
       optStyle: 'letter',
-      prompt: `איזו אות חסרה במילה "${W.p}"?`,
-      speech: `אוי לא! המילה ${W.p} איבדה אות! תגיד לאט ${W.p}, ומצא איזו אות חסרה.`,
-      hint: `תגיד ${W.p} לאט, צליל צליל, והצבע על כל אות. איפה הצליל שאין לו אות?`,
-      revealSpeech: `האות החסרה מהבהבת! לחץ עליה ונשלים את המילה ${W.p}.`,
+      prompt: 'איזו אות חסרה במילה?',
+      speech: `אוי לא! המילה ${w.w} איבדה אות! תגיד לאט ${w.w}, ומצא איזו אות חסרה.`,
+      hint: `תגיד ${w.w} לאט, צליל צליל, והצבע על כל אות. איפה הצליל שאין לו אות?`,
+      revealSpeech: `האות החסרה מהבהבת! לחץ עליה ונשלים את המילה ${w.w}.`,
       answer,
       options: shuffle([answer, ...distract]),
-      visual: { type: 'wordCard', units: W.u, blankIdx: idx, emoji: W.e },
-      word: W,
+      visual: { type: 'wordCard', units: w.u, blankIdx: idx, emoji: w.e },
+      word: w,
       blankIdx: idx
     };
   }
 
-  /* בניית מילה מאותיות (רמות 19-20) */
-  function qBuild(W) {
-    let tiles = shuffle(W.u);
+  /* בניית מילה מאותיות */
+  function qBuild(w) {
+    let tiles = shuffle(w.u);
     let guard = 0;
-    while (W.len > 1 && tiles.join('') === W.u.join('') && guard++ < 10) tiles = shuffle(W.u);
+    while (w.len > 1 && tiles.join('') === w.u.join('') && guard++ < 10) tiles = shuffle(w.u);
     return {
-      kind: 'build',
-      prompt: `בנה את המילה "${W.p}"!`,
-      speech: `בנה את המילה ${W.p}! לחץ על האותיות לפי הסדר: מה הצליל הראשון של ${W.p}?`,
-      hint: `תגיד ${W.p} לאט. הצליל הראשון בא ראשון, ואחריו הבאים בתור.`,
-      answer: W.u.join(''),
+      kind: 'build', type: 'build', key: `build:${w.w}`,
+      prompt: 'בנה את המילה ששמעת!',
+      speech: `בנה את המילה ${w.w}! לחץ על האותיות לפי הסדר: מה הצליל הראשון של ${w.w}?`,
+      hint: `תגיד ${w.w} לאט. הצליל הראשון בא ראשון, ואחריו הבאים בתור.`,
+      answer: w.u.join(''),
       options: [],
-      build: { units: W.u, tiles },
-      visual: { type: 'emoji', e: W.e },
-      word: W
+      build: { units: w.u, tiles },
+      visual: { type: 'emoji', e: w.e },
+      word: w
     };
   }
 
@@ -419,141 +512,161 @@ const LettersLevels = (() => {
   const SET3 = ['כ', 'ל', 'מ', 'נ', 'ס', 'ע'];
   const SET4 = ['פ', 'צ', 'ק', 'ר', 'ש', 'ת'];
 
-  const letterCardsDemo = chars => ({ type: 'letterCards', chars });
+  const letterCards = chars => ({ type: 'letterCards', chars });
 
   const LEVELS = [
     {
       id: 1, name: 'אותיות ראשונות', icon: '🦁',
       explain: 'שלום חבר! היום נכיר חמש אותיות. לכל אות יש צליל משלה! תשמע מילה, תגיד אותה לאט, ומצא את האות שהמילה מתחילה בה. לחץ על הכרטיסים שלמעלה כדי לשמוע כל אות!',
-      demoSpec: letterCardsDemo(SET1),
-      gen: () => qFindLetter(pick(SET1), SET1, 3)
+      demoSpec: letterCards(SET1),
+      gen: () => qFindLetter(draw('L1', SET1), SET1, 3)
     },
     {
       id: 2, name: 'עוד אותיות', icon: '🌹',
       explain: 'חמש אותיות חדשות! תקשיב טוב לצליל שבתחילת המילה - הוא יגלה לך את האות. לחץ על הכרטיסים כדי להכיר אותן!',
-      demoSpec: letterCardsDemo(SET2),
-      gen: () => qFindLetter(pick(SET2), SET2, 3)
+      demoSpec: letterCards(SET2),
+      gen: () => qFindLetter(draw('L2', SET2), SET2, 3)
     },
     {
       id: 3, name: 'אותיות באמצע', icon: '⚽',
       explain: 'עוד שש אותיות חדשות! אתה כבר מכיר המון. לחץ על הכרטיסים לשמוע אותן.',
-      demoSpec: letterCardsDemo(SET3),
-      gen: () => qFindLetter(pick(SET3), SET3, 3)
+      demoSpec: letterCards(SET3),
+      gen: () => qFindLetter(draw('L3', SET3), SET3, 3)
     },
     {
       id: 4, name: 'אותיות אחרונות', icon: '🍎',
       explain: 'האותיות האחרונות! אחרי הרמה הזאת תכיר את כל האלף בית. איזה גיבור!',
-      demoSpec: letterCardsDemo(SET4),
-      gen: () => qFindLetter(pick(SET4), SET4, 3)
+      demoSpec: letterCards(SET4),
+      gen: () => qFindLetter(draw('L4', SET4), SET4, 3)
     },
     {
       id: 5, name: 'כל האותיות', icon: '🎨',
       explain: 'וואו! עכשיו משחקים עם כל האותיות של האלף בית בערבוב! תקשיב למילה ומצא את האות שלה.',
-      demoSpec: letterCardsDemo(['א', 'י', 'מ', 'ק', 'ת']),
-      gen: () => qFindLetter(pick(ALL_CHARS), ALL_CHARS, 4)
+      demoSpec: letterCards(['א', 'י', 'מ', 'ק', 'ת']),
+      gen: () => qFindLetter(draw('L5', ALL_CHARS), ALL_CHARS, 4)
     },
     {
       id: 6, name: 'אותיות דומות', icon: '👀',
       explain: 'יש אותיות שנראות כמעט אותו דבר, כמו תאומות! תסתכל טוב טוב על הצורה לפני שאתה בוחר. עיניים חדות!',
       demoSpec: { type: 'pairCards', pairs: [['ב', 'כ'], ['ד', 'ר'], ['ה', 'ח']], speakKeywords: true },
-      gen: () => qFindLetter(pick(Object.keys(LOOKALIKE)), ALL_CHARS, 3, { preferLookalikes: true })
+      gen: () => qFindLetter(draw('L6', LOOK_KEYS), ALL_CHARS, 3, { lookalikes: true })
     },
     {
-      id: 7, name: 'אותיות סופיות', icon: '🎭',
-      explain: 'סוד מגניב: לחמש אותיות יש עוד צורה, שמופיעה רק בסוף מילה! תסתכל על הזוגות שבחלון - רואה כמה הם דומים?',
-      demoSpec: { type: 'pairCards', pairs: FINALS.map(f => [f.reg, f.fin]), speakKeywords: false },
-      gen: () => qFinal(pick(FINALS), Math.random() < 0.5)
+      id: 7, name: 'האות הפותחת', icon: '📣',
+      explain: 'עכשיו עם המון מילים חדשות! תשמע מילה, תגיד אותה לאט לאט, ותקשיב איזה צליל שומעים ראשון. הצליל הראשון מגלה את האות הפותחת!',
+      demoSpec: { type: 'wordSound', items: [{ word: 'כלב', highlight: 'first' }, { word: 'שמש', highlight: 'first' }] },
+      gen: () => qFirst(draw('L7', WORDS), 4)
     },
     {
-      id: 8, name: 'הצליל הפותח', icon: '📣',
-      explain: 'עכשיו בלי עזרה! תשמע מילה, תגיד אותה לאט לאט, ותקשיב איזה צליל שומעים ראשון. הצליל הראשון מגלה את האות!',
-      demoSpec: { type: 'wordSound', word: 'כֶּלֶב', highlight: 'first' },
-      gen: () => qSound(pick(WORDS), 'first')
+      id: 8, name: 'האות הסוגרת', icon: '🔔',
+      explain: 'עכשיו מקשיבים דווקא לסוף! תגיד את המילה עד הסוף, ותקשיב לצליל האחרון. הצליל האחרון מגלה את האות הסוגרת!',
+      demoSpec: { type: 'wordSound', items: [{ word: 'ספר', highlight: 'last' }, { word: 'דג', highlight: 'last' }] },
+      gen: () => qLast(draw('L8', LAST_PLAIN), 4)
     },
     {
-      id: 9, name: 'הצליל הסוגר', icon: '🔔',
-      explain: 'עכשיו מקשיבים דווקא לסוף! תגיד את המילה עד הסוף, ותקשיב לצליל האחרון. וזכור: בסוף מילה יש אותיות עם צורה מיוחדת!',
-      demoSpec: { type: 'wordSound', word: 'בָּלוֹן', highlight: 'last' },
-      gen: () => qSound(pick(WORDS), 'last')
+      id: 9, name: 'אותיות סופיות', icon: '🎭',
+      explain: 'סוד מגניב: לחמש אותיות יש עוד צורה, שמופיעה רק בסוף מילה! תסתכל על הזוגות - רואה כמה הם דומים? כשמילה נגמרת באחת האותיות האלה, בוחרים את הצורה הסופית שלה.',
+      demoSpec: [
+        { type: 'pairCards', pairs: FINALS.map(f => [f.reg, f.fin]), speakKeywords: false },
+        { type: 'wordSound', items: [{ word: 'בלון', highlight: 'last' }, { word: 'מים', highlight: 'last' }] }
+      ],
+      gen: () => mix([
+        [5, () => qLast(draw('L9f', LAST_FINAL), 4)],
+        [3, () => qFinalPair(draw('L9p', FINAL_COMBOS))],
+        [2, () => qLast(draw('L9r', LAST_PLAIN), 4)]
+      ])
     },
     {
-      id: 10, name: 'מחיאות כף', icon: '👏',
-      explain: 'כל מילה אפשר לחלק לחתיכות! מוחאים כף על כל חתיכה: בָּ-נָ-נָה - שלוש מחיאות! תשמע מילה, מחא כפיים ביחד איתה, וספור.',
-      demoSpec: { type: 'claps', word: 'בָּנָנָה' },
-      gen: () => qClaps(pick(WORDS.filter(W => W.syl)))
+      id: 10, name: 'הברות', icon: '🎶',
+      explain: 'כל מילה בנויה מחלקים קטנים שנקראים הברות. תגיד את המילה לאט לאט, ותרגיש איך היא נשברת לחלקים. במילה בננה יש שלוש הברות! תשמע מילה, תגיד אותה לאט, וספור את ההברות.',
+      demoSpec: { type: 'syllables', words: ['דג', 'ספר', 'בננה'] },
+      gen: () => qSyllables(draw('L10', SYL_WORDS))
     },
     {
-      id: 11, name: 'קמץ ופתח', icon: '✨',
-      explain: 'האותיות לבד שקטות - הניקוד נותן להן קול! קו קטן מתחת לאות עושה אַה. תשמע צליל כמו בָּה או גָה - ומצא אותו!',
-      demoSpec: { type: 'vowelCards', items: [{ L: 'בּ', v: 'kamatz' }, { L: 'ג', v: 'patach' }, { L: 'מ', v: 'kamatz' }] },
-      gen: () => qVowelSound(['kamatz', 'patach'], ['chirik', 'cholam', 'shuruk'])
+      id: 11, name: 'פותחת או סוגרת?', icon: '🎯',
+      explain: 'עכשיו צריך להקשיב טוב לשאלה! לפעמים אשאל באיזו אות המילה מתחילה, ולפעמים באיזו אות היא נגמרת. תקשיב מה שואלים, ואז תגיד את המילה לאט. ואל תשכח את האותיות הסופיות!',
+      demoSpec: { type: 'wordSound', items: [{ word: 'כלב', highlight: 'first' }, { word: 'בלון', highlight: 'last' }] },
+      gen: () => mix([
+        [9, () => qFirst(draw('L11a', WORDS), 4)],
+        [9, () => qLast(draw('L11b', WORDS), 4)],
+        [2, () => qFinalPair(draw('L11c', FINAL_COMBOS))]
+      ])
     },
     {
-      id: 12, name: 'חיריק', icon: '🌟',
-      explain: 'ניקוד חדש: נקודה אחת קטנה מתחת לאות - חיריק! החיריק עושה אִי, כמו בִּי, גִי, מִי!',
-      demoSpec: { type: 'vowelCards', items: [{ L: 'בּ', v: 'chirik' }, { L: 'ג', v: 'chirik' }, { L: 'מ', v: 'chirik' }] },
-      gen: () => Math.random() < 0.6
-        ? qVowelSound(['chirik'], ['kamatz', 'patach', 'cholam'])
-        : qVowelSound(['kamatz', 'patach'], ['chirik', 'cholam'])
+      id: 12, name: 'מי מתחיל באות?', icon: '🔎',
+      explain: 'עכשיו הפוך! אני אגיד לך אות, ואתה תמצא את התמונה שהמילה שלה מתחילה באות הזאת. תגיד את השם של כל תמונה לאט, ותקשיב לצליל הראשון.',
+      demoSpec: { type: 'letterWords', ch: 'כ', words: ['כלב', 'כוכב', 'כדור'], where: 'first' },
+      gen: () => mix([
+        [13, () => qStartsWith(draw('L12a', START_POOL))],
+        [7, () => qSameStart(draw('L12b', SAME_START_WORDS))]
+      ])
     },
     {
-      id: 13, name: 'חולם', icon: '💫',
-      explain: 'עוד ניקוד: האות וו עם נקודה למעלה - חולם! החולם עושה אוֹ, כמו בּוֹ, גוֹ, לוֹ!',
-      demoSpec: { type: 'vowelCards', items: [{ L: 'בּ', v: 'cholam' }, { L: 'ג', v: 'cholam' }, { L: 'ל', v: 'cholam' }] },
-      gen: () => {
-        const r = Math.random();
-        if (r < 0.5) return qVowelSound(['cholam'], ['kamatz', 'chirik']);
-        if (r < 0.75) return qVowelSound(['chirik'], ['kamatz', 'cholam']);
-        return qVowelSound(['kamatz', 'patach'], ['chirik', 'cholam']);
-      }
+      id: 13, name: 'מי נגמר באות?', icon: '🎪',
+      explain: 'ועכשיו עם הסוף! אני אגיד לך אות, ואתה תמצא את התמונה שהמילה שלה נגמרת באות הזאת. תגיד כל מילה עד הסוף, ותקשיב לצליל האחרון. זכור את האותיות הסופיות!',
+      demoSpec: { type: 'letterWords', ch: 'ן', words: ['בלון', 'שעון', 'ליצן'], where: 'last' },
+      gen: () => mix([
+        [15, () => qEndsWith(draw('L13a', END_POOL))],
+        [3, () => qLast(draw('L13b', WORDS), 4)],
+        [2, () => qFinalPair(draw('L13c', FINAL_COMBOS))]
+      ])
     },
     {
-      id: 14, name: 'עוד ניקוד', icon: '🎵',
-      explain: 'שלושה סימנים חדשים! סגול - שלוש נקודות מתחת לאות. צירה - שתי נקודות. ושורוק - וו עם נקודה באמצע. תשמע שם של סימן - ומצא אותו!',
-      demoSpec: { type: 'vowelCards', items: [{ L: 'בּ', v: 'segol' }, { L: 'בּ', v: 'tsere' }, { L: 'בּ', v: 'shuruk' }], sayName: true },
-      gen: () => qVowelName(['segol', 'tsere', 'shuruk'], ['segol', 'tsere', 'shuruk', 'kamatz', 'chirik'])
+      id: 14, name: 'עוד הברות', icon: '🥁',
+      explain: 'עוד משחק הברות! לפעמים תספור כמה הברות יש במילה, ולפעמים אני אגיד מספר, ואתה תמצא את התמונה שיש לה בדיוק כל כך הרבה הברות. תגיד כל מילה לאט לאט, וספור.',
+      demoSpec: { type: 'syllables', words: ['סוס', 'כובע', 'מתנה'] },
+      gen: () => mix([
+        [1, () => qSyllables(draw('L14a', SYL_HARD))],
+        [1, () => qSylPick(draw('L14b', [1, 2, 3]))]
+      ])
     },
     {
       id: 15, name: 'קוראים מילים!', icon: '📖',
-      explain: 'הרגע הכי גדול - אתה קורא מילה אמיתית! תסתכל על כל אות ועל הניקוד שלה, תגיד את הצלילים לאט, וחבר אותם. דָּ וגם ג - דָּג! ואז מצא את התמונה.',
-      demoSpec: { type: 'wordReveal', word: 'דָּג' },
-      gen: () => qReadWord(pick(wordsByLen(2)), 3, [2, 3])
+      explain: 'הרגע הכי גדול - אתה קורא מילה אמיתית! תסתכל על כל אות, תגיד את הצליל שלה, וחבר את הצלילים ביחד למילה אחת. ואז מצא את התמונה של המילה.',
+      demoSpec: { type: 'wordReveal', word: 'דג' },
+      gen: () => qReadWord(draw('L15', LEN2), 3, [2, 3])
     },
     {
       id: 16, name: 'מילים ארוכות יותר', icon: '📚',
       explain: 'עכשיו מילים עם שלוש אותיות! קרא לאט, צליל אחרי צליל, ואז חבר הכול למילה אחת.',
-      demoSpec: { type: 'wordReveal', word: 'סֵפֶר' },
-      gen: () => qReadWord(pick(wordsByLen(3)), 4, [2, 3])
+      demoSpec: { type: 'wordReveal', word: 'ספר' },
+      gen: () => qReadWord(draw('L16', LEN3), 4, [2, 3, 4])
     },
     {
       id: 17, name: 'מהתמונה למילה', icon: '🖼️',
       explain: 'הפוך על הפוך! רואים תמונה - ומחפשים את המילה הכתובה שלה. קרא את כל המילים לאט. זהירות: יש מילים דומות שמנסות לבלבל!',
-      demoSpec: { type: 'wordReveal', word: 'גָּמָל' },
-      gen: () => qPickWord(pick([...wordsByLen(2), ...wordsByLen(3)]), 3, [2, 3])
+      demoSpec: { type: 'wordReveal', word: 'גמל' },
+      gen: () => qPickWord(draw('L17', LEN23), 3, [2, 3])
     },
     {
       id: 18, name: 'האות החסרה', icon: '🧩',
       explain: 'אוי לא! המילים מאבדות אותיות! תגיד את המילה לאט, תקשיב איזה צליל מתחבא במקום הריק, ומצא את האות שברחה.',
-      demoSpec: { type: 'missingDemo', word: 'כֶּלֶב', idx: 1 },
-      gen: () => qMissing(pick([...wordsByLen(3), ...wordsByLen(4)]))
+      demoSpec: { type: 'missingDemo', word: 'כלב', idx: 1 },
+      gen: () => qMissing(draw('L18', LEN34))
     },
     {
       id: 19, name: 'בונים מילים', icon: '🧱',
       explain: 'עכשיו אתה הבנאי! תשמע מילה, ובנה אותה בעצמך: לחץ על האותיות לפי הסדר, מהצליל הראשון ועד האחרון.',
-      demoSpec: { type: 'buildDemo', word: 'דָּג' },
-      gen: () => qBuild(pick([...wordsByLen(2), ...wordsByLen(3)]))
+      demoSpec: { type: 'buildDemo', word: 'דג' },
+      gen: () => qBuild(draw('L19', LEN23))
     },
     {
       id: 20, name: 'אלוף המילים', icon: '🏆',
-      explain: 'האתגר האחרון! מילים גדולות של ארבע אותיות - לפעמים תקרא ותמצא תמונה, ולפעמים תבנה בעצמך. מי שמסיים - יודע לקרוא! אלוף אמיתי!',
-      demoSpec: { type: 'buildDemo', word: 'בָּלוֹן' },
-      gen: () => Math.random() < 0.5
-        ? qBuild(pick(wordsByLen(4)))
-        : qReadWord(pick(wordsByLen(4)), 4, [3, 4])
+      explain: 'האתגר האחרון! מילים גדולות של ארבע אותיות - לפעמים תקרא ותמצא תמונה, לפעמים תמצא אות חסרה, ולפעמים תבנה בעצמך. מי שמסיים - יודע לקרוא! אלוף אמיתי!',
+      demoSpec: { type: 'buildDemo', word: 'בלון' },
+      gen: () => mix([
+        [7, () => qBuild(draw('L20a', LEN4))],
+        [5, () => qReadWord(draw('L20b', LEN4), 4, [3, 4])],
+        [4, () => qMissing(draw('L20c', LEN4))],
+        [4, () => qPickWord(draw('L20d', LEN4), 4, [3, 4])]
+      ])
     }
   ];
 
-  return { LEVELS, LETTERS, byChar, WORDS, VOWELS, FINALS, SYL_LETTERS, LOOKALIKE, splitUnits, syllGlyph, syllSpeech };
+  return {
+    LEVELS, LETTERS, byChar, WORDS, FINALS, LOOKALIKE, END_CHARS,
+    wordOf, letterName, sameSound, makeDeck, shuffle
+  };
 })();
 
 if (typeof module !== 'undefined') module.exports = LettersLevels;

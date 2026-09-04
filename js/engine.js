@@ -1,7 +1,8 @@
 /* ═══════════════ מנוע המשחקים המשותף ═══════════════
  * כל משחק (חשבון, אותיות...) הוא קונפיגורציה של המנוע הזה.
  * המנוע מנהל: חלון רמות מתגלגל, כוכבים ועליית רמה, נעילת "זמן חשיבה",
- * סולם רמזים אחרי טעויות, חלון הסבר קולי, ושמירת התקדמות.
+ * סולם רמזים אחרי טעויות, חלון הסבר קולי, מניעת חזרה על אותו תרגיל,
+ * מבחן אחרי כל כמה רמות (אופציונלי), ושמירת התקדמות.
  *
  * config = {
  *   key            'math' | 'letters' - שם פרוסת המצב ב-App.state
@@ -14,7 +15,20 @@
  *   build          {render(q, els, api)} - אינטראקציית בנייה (לא כפתורי בחירה), אופציונלי
  *   defaultRevealSpeech (q) - מה מקריאים כשחושפים את התשובה (אם אין q.revealSpeech)
  *   champSpeech    מה אומרים כשמסיימים את כל הרמות
+ *   testEvery      מבחן אחרי כל כמה רמות (0/חסר = בלי מבחנים)
+ *   testLength     כמה שאלות במבחן (ברירת מחדל 10)
+ *   testPass       כמה תשובות נכונות בניסיון ראשון כדי לעבור (ברירת מחדל 7)
+ *   testIntro      (lo, hi, len, pass) - הטקסט המוקרא בפתיחת מבחן
+ *   testResult     ({score, total, passed}) - הטקסט המוקרא בסיום מבחן
  * }
+ *
+ * מניעת חזרות: לכל תרגיל יש מפתח (q.key, ואם אין - טקסט ההקראה). המנוע זוכר
+ * את המפתחות של התרגילים האחרונים ומבקש מהמחולל תרגיל אחר אם יצא אחד מהם.
+ *
+ * מבחן: כשמסיימים רמה שמספרה מתחלק ב-testEvery, במקום לעלות רמה מיד יש מבחן
+ * קצר על הרמות של הבלוק (למשל 1-5). בכל שאלה ניסיון אחד בלבד. עוברים - מדליה
+ * ועולים רמה; לא עוברים - הכוכבים מתאפסים, מתאמנים עוד קצת, ומנסים שוב.
+ * הדגל pendingTest נשמר, כך שיציאה באמצע לא מוותרת על המבחן.
  */
 
 function createEngine(config) {
@@ -25,6 +39,11 @@ function createEngine(config) {
   const WINDOW_SIZE = config.windowSize || 5;
   const THINK_MS = config.thinkMs || 3000;
   const RETRY_MS = config.retryMs || 4000;
+  const RECENT_MAX = config.recentMax || 8;      // כמה תרגילים אחרונים לא חוזרים
+  const GEN_TRIES = 12;                            // כמה פעמים לנסות תרגיל שלא הופיע לאחרונה
+  const TEST_EVERY = config.testEvery || 0;
+  const TEST_LEN = config.testLength || 10;
+  const TEST_PASS = config.testPass || 7;
   const RING_LEN = 276.5;
 
   const PRAISE = ['כל הכבוד!', 'מעולה!', 'איזה יופי!', 'נכון מאוד!', 'אלוף!', 'מדהים!', 'וואו, נכון!'];
@@ -38,6 +57,9 @@ function createEngine(config) {
   let revealMode = false;
   let freshLeft = 0;
   let explainCtx = null;
+  let recent = [];          // מפתחות התרגילים האחרונים
+  let test = null;          // {levels, queue, idx, score, results} בזמן מבחן
+  let lastResult = null;    // תוצאת המבחן האחרון (לחלון התוצאה)
   let lockTimer = null, nextTimer = null, flyTimer = null, toastTimer = null;
 
   const $ = id => document.getElementById(id);
@@ -54,6 +76,15 @@ function createEngine(config) {
     if (cls) e.className = cls;
     if (text !== undefined) e.textContent = text;
     return e;
+  }
+
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
   }
 
   /* ─── חלון הרמות המתגלגל ─── */
@@ -75,6 +106,23 @@ function createEngine(config) {
       if (r <= 0) return win[i];
     }
     return win[win.length - 1];
+  }
+
+  /* ─── מניעת חזרה על אותו תרגיל ─── */
+  const keyOf = qq => qq.key || qq.speech || '';
+
+  function genFresh(lvl, seen) {
+    let cand = null;
+    for (let i = 0; i < GEN_TRIES; i++) {
+      cand = LEVELS[lvl - 1].gen();
+      if (!seen.includes(keyOf(cand))) break;
+    }
+    return cand;
+  }
+
+  function remember(qq) {
+    recent.push(keyOf(qq));
+    if (recent.length > RECENT_MAX) recent.shift();
   }
 
   /* ─── נעילת זמן חשיבה ─── */
@@ -169,8 +217,21 @@ function createEngine(config) {
     config.revealAnswer(q, els());
 
     st.answered++;
+    if (firstTry) st.firstTry++;
+
+    /* במבחן: נקודה רק על תשובה נכונה בניסיון ראשון, ובלי כוכבים */
+    if (test) {
+      if (firstTry) {
+        test.score++;
+        markTestSlot(test.idx, true);
+        if (Math.random() < 0.5) Speech.speak(PRAISE[Math.floor(Math.random() * PRAISE.length)]);
+      }
+      App.save();
+      nextTimer = setTimeout(() => { test.idx++; nextQuestion(); }, 1700);
+      return;
+    }
+
     if (firstTry) {
-      st.firstTry++;
       st.stars++;
       st.totalStars++;
       const slot = $('star-meter').children[st.stars - 1];
@@ -199,6 +260,13 @@ function createEngine(config) {
     Sounds.wrong();
     btn.classList.add('bad');
     setTimeout(() => { btn.classList.remove('bad'); btn.classList.add('spent'); }, 550);
+
+    /* במבחן יש ניסיון אחד: מסמנים טעות וחושפים את התשובה */
+    if (test) {
+      markTestSlot(test.idx, false);
+      revealAnswerBtn();
+      return;
+    }
 
     const remaining = [...document.querySelectorAll('#options .opt')]
       .filter(b => !b.classList.contains('spent') && b !== btn).length;
@@ -233,6 +301,7 @@ function createEngine(config) {
   /* ─── תשובות: מסלול בנייה (למשל הרכבת מילה מאותיות) ─── */
   const buildApi = {
     isLocked: () => locked,
+    isTest: () => !!test,
     lockedFeedback,
     miss(elm, { lockMs = 2000 } = {}) {
       attempts++;
@@ -240,6 +309,13 @@ function createEngine(config) {
       if (elm) {
         elm.classList.add('bad');
         setTimeout(() => elm.classList.remove('bad'), 550);
+      }
+      if (test) {
+        // במבחן: הטעות נרשמת, והמפעיל מדגיש את הצעד הבא כדי שיסיים את המילה
+        markTestSlot(test.idx, false);
+        Speech.speak('לא נורא! האות הבאה מהבהבת - תמשיך לבנות.');
+        lock(900);
+        return attempts;
       }
       speakWrongLadder();
       lock(lockMs);
@@ -256,12 +332,17 @@ function createEngine(config) {
     resolving = false;
     revealMode = false;
 
-    let lvl;
-    if (freshLeft > 0) { lvl = S().maxLevel; freshLeft--; }
-    else lvl = pickLevel();
-
-    q = LEVELS[lvl - 1].gen();
-    q.levelId = lvl;
+    if (test) {
+      if (test.idx >= test.queue.length) { finishTest(); return; }
+      q = test.queue[test.idx];
+    } else {
+      let lvl;
+      if (freshLeft > 0) { lvl = S().maxLevel; freshLeft--; }
+      else lvl = pickLevel();
+      q = genFresh(lvl, recent);
+      q.levelId = lvl;
+    }
+    remember(q);
 
     const area = $('question-area');
     area.style.animation = 'none';
@@ -286,10 +367,22 @@ function createEngine(config) {
 
   function updateTopbar() {
     const st = S();
-    const L = LEVELS[st.maxLevel - 1];
-    $('level-badge').textContent = `רמה ${st.maxLevel} ${L.icon}`;
     const meter = $('star-meter');
     meter.innerHTML = '';
+    $('screen-game').classList.toggle('test-mode', !!test);
+
+    if (test) {
+      $('level-badge').textContent = '🏅 מבחן';
+      test.queue.forEach((_, i) => {
+        const r = test.results[i];
+        meter.appendChild(el('span', 'test-slot' + (r === undefined ? '' : ' done'),
+          r === undefined ? '⚪' : (r ? '✅' : '❌')));
+      });
+      return;
+    }
+
+    const L = LEVELS[st.maxLevel - 1];
+    $('level-badge').textContent = `רמה ${st.maxLevel} ${L.icon}`;
     for (let i = 0; i < STARS_PER_LEVEL; i++) {
       meter.appendChild(el('span', 'star-slot' + (i < st.stars ? ' full' : ''), '⭐'));
     }
@@ -302,6 +395,18 @@ function createEngine(config) {
     Confetti.rain();
     mascotHappy();
 
+    /* סוף בלוק של רמות? קודם מבחן, ורק אחרי שעוברים אותו עולים רמה */
+    if (TEST_EVERY && st.maxLevel % TEST_EVERY === 0) {
+      st.pendingTest = true;
+      App.save();
+      nextTimer = setTimeout(showTestIntro, 900);
+      return;
+    }
+    advanceLevel();
+  }
+
+  function advanceLevel() {
+    const st = S();
     if (st.maxLevel < LEVELS.length) {
       st.maxLevel++;
       st.stars = 0;
@@ -319,6 +424,127 @@ function createEngine(config) {
     }
   }
 
+  /* ─── מבחן ─── */
+  function testBlock() {
+    const hi = S().maxLevel;
+    const lo = Math.max(1, hi - TEST_EVERY + 1);
+    const ids = [];
+    for (let l = lo; l <= hi; l++) ids.push(l);
+    return ids;
+  }
+
+  /* שאלות המבחן: מספר שווה מכל רמה בבלוק, בערבוב, בלי חזרות */
+  function buildTestQueue(ids) {
+    const queue = [];
+    const seen = [];
+    let order = [];
+    while (queue.length < TEST_LEN) {
+      if (!order.length) order = shuffle(ids);
+      const lvl = order.pop();
+      const cand = genFresh(lvl, seen);
+      seen.push(keyOf(cand));
+      cand.levelId = lvl;
+      queue.push(cand);
+    }
+    return queue;
+  }
+
+  function testIntroSpeech() {
+    const ids = testBlock();
+    return config.testIntro(ids[0], ids[ids.length - 1], TEST_LEN, TEST_PASS);
+  }
+
+  function showTestIntro() {
+    explainCtx = 'test-intro';
+    const ids = testBlock();
+    const banner = $('explain-banner');
+    banner.textContent = '🏅 מבחן! 🏅';
+    banner.classList.remove('hidden');
+    $('explain-icon').textContent = '📝';
+    $('explain-name').textContent = `מבחן על רמות ${ids[0]} עד ${ids[ids.length - 1]}`;
+    $('explain-text').textContent = testIntroSpeech();
+
+    // הרמות שבמבחן - כרטיסים לחיצים שמזכירים מה למדנו
+    const demoBox = $('explain-demo');
+    demoBox.innerHTML = '';
+    const row = el('div', 'demo-cards');
+    ids.forEach(id => {
+      const L = LEVELS[id - 1];
+      const c = el('button', 'demo-card');
+      c.appendChild(el('span', 'demo-main', L.icon));
+      c.appendChild(el('span', 'demo-sub', L.name));
+      c.addEventListener('click', () => { Sounds.click(); Speech.speak(`רמה ${id}: ${L.name}`); });
+      row.appendChild(c);
+    });
+    demoBox.appendChild(row);
+
+    $('btn-explain-start').textContent = '▶ מתחילים!';
+    $('overlay-explain').classList.remove('hidden');
+    setTimeout(() => Speech.speak(testIntroSpeech()), 350);
+  }
+
+  function beginTest() {
+    const ids = testBlock();
+    test = { levels: ids, queue: buildTestQueue(ids), idx: 0, score: 0, results: [] };
+    recent = [];
+    updateTopbar();
+    nextQuestion();
+  }
+
+  /* התוצאה הראשונה של כל שאלה קובעת (טעות ואז לחיצה על התשובה החשופה = טעות) */
+  function markTestSlot(i, ok) {
+    if (!test) return;
+    if (test.results[i] === undefined) test.results[i] = ok;
+    const slot = $('star-meter').children[i];
+    if (slot) {
+      slot.textContent = test.results[i] ? '✅' : '❌';
+      slot.classList.add('done');
+    }
+  }
+
+  function finishTest() {
+    const st = S();
+    const total = test.queue.length;
+    const passed = test.score >= TEST_PASS;
+    lastResult = { score: test.score, total, passed, levels: test.levels, results: test.results.slice() };
+    test = null;
+    st.pendingTest = false;
+    st.medals = st.medals || [];
+    if (passed) {
+      if (!st.medals.includes(st.maxLevel)) st.medals.push(st.maxLevel);
+      Sounds.levelup();
+      Confetti.rain();
+      mascotHappy();
+    } else {
+      st.stars = 0;
+    }
+    App.save();
+    App.refreshHome();
+    updateTopbar();
+    nextTimer = setTimeout(() => showTestResult(lastResult), 500);
+  }
+
+  function showTestResult(res) {
+    explainCtx = 'test-result';
+    const banner = $('explain-banner');
+    banner.textContent = res.passed ? '🏅 קיבלת מדליה! 🏅' : '💪 עוד קצת אימון';
+    banner.classList.remove('hidden');
+    $('explain-icon').textContent = res.passed ? '🏆' : '🤗';
+    $('explain-name').textContent = `${res.score} מתוך ${res.total} נכון!`;
+    const text = config.testResult(res);
+    $('explain-text').textContent = text;
+
+    const demoBox = $('explain-demo');
+    demoBox.innerHTML = '';
+    const row = el('div', 'test-summary');
+    for (let i = 0; i < res.total; i++) row.appendChild(el('span', 'test-slot done', res.results[i] ? '✅' : '❌'));
+    demoBox.appendChild(row);
+
+    $('btn-explain-start').textContent = res.passed ? '▶ ממשיכים!' : '▶ מתאמנים עוד!';
+    $('overlay-explain').classList.remove('hidden');
+    setTimeout(() => Speech.speak(text), 350);
+  }
+
   /* ─── חלון הסבר ─── */
   function explainSpeechText(levelId) {
     const L = LEVELS[levelId - 1];
@@ -329,10 +555,13 @@ function createEngine(config) {
   function showExplain(levelId, ctx) {
     explainCtx = ctx;
     const L = LEVELS[levelId - 1];
-    $('explain-banner').classList.toggle('hidden', !(ctx === 'intro' && levelId > 1));
+    const banner = $('explain-banner');
+    banner.textContent = '🎉 רמה חדשה! 🎉';
+    banner.classList.toggle('hidden', !(ctx === 'intro' && levelId > 1));
     $('explain-icon').textContent = L.icon;
     $('explain-name').textContent = `רמה ${levelId}: ${L.name}`;
     $('explain-text').textContent = L.explain;
+    $('btn-explain-start').textContent = ctx === 'help' ? '▶ ממשיכים!' : '▶ מתחילים!';
 
     const demoBox = $('explain-demo');
     demoBox.innerHTML = '';
@@ -352,6 +581,8 @@ function createEngine(config) {
   }
 
   function replayExplain() {
+    if (explainCtx === 'test-intro') { Speech.speak(testIntroSpeech()); return; }
+    if (explainCtx === 'test-result' && lastResult) { Speech.speak(config.testResult(lastResult)); return; }
     const levelId = explainCtx === 'help' && q ? q.levelId : S().maxLevel;
     Speech.speak(explainSpeechText(levelId));
   }
@@ -359,23 +590,32 @@ function createEngine(config) {
   function closeExplain() {
     $('overlay-explain').classList.add('hidden');
     Speech.stop();
-    if (explainCtx === 'intro') {
+    const ctx = explainCtx;
+    explainCtx = null;
+    if (ctx === 'intro') {
       const st = S();
       st.explainedUpTo = Math.max(st.explainedUpTo, st.maxLevel);
       App.save();
       freshLeft = 2;
       nextQuestion();
+    } else if (ctx === 'test-intro') {
+      beginTest();
+    } else if (ctx === 'test-result') {
+      if (lastResult && lastResult.passed) advanceLevel();
+      else { updateTopbar(); nextQuestion(); }
     } else if (q) {
       Speech.speak(q.speech);
     }
-    explainCtx = null;
   }
 
   /* ─── API ─── */
   return {
     open() {
+      test = null;
       updateTopbar();
-      if (S().explainedUpTo < S().maxLevel) showExplain(S().maxLevel, 'intro');
+      const st = S();
+      if (TEST_EVERY && st.pendingTest) showTestIntro();
+      else if (st.explainedUpTo < st.maxLevel) showExplain(st.maxLevel, 'intro');
       else nextQuestion();
     },
 
@@ -384,6 +624,8 @@ function createEngine(config) {
       clearTimeout(nextTimer);
       clearTimeout(flyTimer);
       Speech.stop();
+      test = null; // יציאה באמצע מבחן: המבחן יתחיל מחדש בכניסה הבאה (pendingTest נשמר)
+      $('screen-game').classList.remove('test-mode');
     },
 
     sayQuestion() {
@@ -401,6 +643,9 @@ function createEngine(config) {
       const st = S();
       st.stars = 0;
       st.explainedUpTo = st.maxLevel;
+      st.pendingTest = false;
+      test = null;
+      recent = [];
       freshLeft = 0;
       App.save();
       if (!$('screen-game').classList.contains('hidden') && App.activeEngine === this) {
@@ -411,6 +656,7 @@ function createEngine(config) {
 
     current() { return q; },
     key: config.key,
-    STARS_PER_LEVEL
+    STARS_PER_LEVEL,
+    TEST_EVERY
   };
 }
