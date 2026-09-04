@@ -1098,6 +1098,14 @@ button {
 }
 .stkr.medal.locked { font-size: 17px; filter: grayscale(1); opacity: 0.55; }
 
+/* מדליה שאפשר לגשת ולאסוף עכשיו - קורצת לילד */
+.stkr.medal.ready {
+  background: #fff8e6;
+  border: 2px dashed #ffb03a;
+  box-shadow: 0 2px 5px rgba(60, 30, 120, 0.28);
+  animation: pulseSoft 1.5s ease-in-out infinite;
+}
+
 /* מסכים צרים מאוד */
 @media (max-width: 360px) {
   .options { gap: 8px; }

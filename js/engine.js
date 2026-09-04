@@ -29,6 +29,10 @@
  * קצר על הרמות של הבלוק (למשל 1-5). בכל שאלה ניסיון אחד בלבד. עוברים - מדליה
  * ועולים רמה; לא עוברים - הכוכבים מתאפסים, מתאמנים עוד קצת, ומנסים שוב.
  * הדגל pendingTest נשמר, כך שיציאה באמצע לא מוותרת על המבחן.
+ *
+ * מבחן חוזר (retro): מדליה שלא נאספה - למשל של ילד שכבר עבר את הרמות האלה
+ * לפני שהמבחנים היו קיימים - נשארת פתוחה לאיסוף. לוחצים עליה באלבום ונכנסים
+ * לאותו מבחן בדיוק. הוא לא מעלה רמה ולא מאפס כוכבים: רק אוסף את המדליה.
  */
 
 function createEngine(config) {
@@ -58,7 +62,9 @@ function createEngine(config) {
   let freshLeft = 0;
   let explainCtx = null;
   let recent = [];          // מפתחות התרגילים האחרונים
-  let test = null;          // {levels, queue, idx, score, results} בזמן מבחן
+  let test = null;          // {levels, blockEnd, retro, queue, idx, score, results} בזמן מבחן
+  let pendingIntro = null;  // {blockEnd, retro} - איזה מבחן ייפתח כשסוגרים את חלון הפתיחה
+  let introText = '';       // טקסט פתיחת המבחן, נשמר כדי שהקראה מושהית לא תיפול אם כבר התחלנו
   let lastResult = null;    // תוצאת המבחן האחרון (לחלון התוצאה)
   let lockTimer = null, nextTimer = null, flyTimer = null, toastTimer = null;
 
@@ -399,7 +405,7 @@ function createEngine(config) {
     if (TEST_EVERY && st.maxLevel % TEST_EVERY === 0) {
       st.pendingTest = true;
       App.save();
-      nextTimer = setTimeout(showTestIntro, 900);
+      nextTimer = setTimeout(() => showTestIntro(st.maxLevel), 900);
       return;
     }
     advanceLevel();
@@ -425,11 +431,11 @@ function createEngine(config) {
   }
 
   /* ─── מבחן ─── */
-  function testBlock() {
-    const hi = S().maxLevel;
-    const lo = Math.max(1, hi - TEST_EVERY + 1);
+  /* הרמות שהמבחן שסוגר את blockEnd בודק (למשל 5 ← [1,2,3,4,5]) */
+  function testBlock(blockEnd) {
+    const lo = Math.max(1, blockEnd - TEST_EVERY + 1);
     const ids = [];
-    for (let l = lo; l <= hi; l++) ids.push(l);
+    for (let l = lo; l <= blockEnd; l++) ids.push(l);
     return ids;
   }
 
@@ -450,19 +456,23 @@ function createEngine(config) {
   }
 
   function testIntroSpeech() {
-    const ids = testBlock();
-    return config.testIntro(ids[0], ids[ids.length - 1], TEST_LEN, TEST_PASS);
+    const { blockEnd, retro } = pendingIntro;
+    const ids = testBlock(blockEnd);
+    return (retro ? 'המדליה הזאת עוד מחכה לך! ' : '') +
+      config.testIntro(ids[0], ids[ids.length - 1], TEST_LEN, TEST_PASS);
   }
 
-  function showTestIntro() {
+  function showTestIntro(blockEnd, retro = false) {
     explainCtx = 'test-intro';
-    const ids = testBlock();
+    pendingIntro = { blockEnd, retro };
+    const ids = testBlock(blockEnd);
     const banner = $('explain-banner');
-    banner.textContent = '🏅 מבחן! 🏅';
+    banner.textContent = retro ? '🏅 מבחן למדליה! 🏅' : '🏅 מבחן! 🏅';
     banner.classList.remove('hidden');
     $('explain-icon').textContent = '📝';
     $('explain-name').textContent = `מבחן על רמות ${ids[0]} עד ${ids[ids.length - 1]}`;
-    $('explain-text').textContent = testIntroSpeech();
+    introText = testIntroSpeech();
+    $('explain-text').textContent = introText;
 
     // הרמות שבמבחן - כרטיסים לחיצים שמזכירים מה למדנו
     const demoBox = $('explain-demo');
@@ -479,13 +489,17 @@ function createEngine(config) {
     demoBox.appendChild(row);
 
     $('btn-explain-start').textContent = '▶ מתחילים!';
+    // מבחן חוזר נבחר מרצון מהאלבום - חייבת להיות דרך לצאת בלי לעשות אותו
+    $('btn-explain-cancel').classList.toggle('hidden', !retro);
     $('overlay-explain').classList.remove('hidden');
-    setTimeout(() => Speech.speak(testIntroSpeech()), 350);
+    setTimeout(() => Speech.speak(introText), 350);
   }
 
   function beginTest() {
-    const ids = testBlock();
-    test = { levels: ids, queue: buildTestQueue(ids), idx: 0, score: 0, results: [] };
+    const { blockEnd, retro } = pendingIntro;
+    const ids = testBlock(blockEnd);
+    test = { levels: ids, blockEnd, retro, queue: buildTestQueue(ids), idx: 0, score: 0, results: [] };
+    pendingIntro = null;
     recent = [];
     updateTopbar();
     nextQuestion();
@@ -506,16 +520,19 @@ function createEngine(config) {
     const st = S();
     const total = test.queue.length;
     const passed = test.score >= TEST_PASS;
-    lastResult = { score: test.score, total, passed, levels: test.levels, results: test.results.slice() };
+    const retro = test.retro;
+    lastResult = { score: test.score, total, passed, retro, levels: test.levels, results: test.results.slice() };
+    const blockEnd = test.blockEnd;
     test = null;
-    st.pendingTest = false;
+    if (!retro) st.pendingTest = false;
     st.medals = st.medals || [];
     if (passed) {
-      if (!st.medals.includes(st.maxLevel)) st.medals.push(st.maxLevel);
+      if (!st.medals.includes(blockEnd)) st.medals.push(blockEnd);
       Sounds.levelup();
       Confetti.rain();
       mascotHappy();
-    } else {
+    } else if (!retro) {
+      // כישלון במבחן ההתקדמות מחזיר לתרגול; מבחן חוזר לא עולה כלום
       st.stars = 0;
     }
     App.save();
@@ -541,6 +558,7 @@ function createEngine(config) {
     demoBox.appendChild(row);
 
     $('btn-explain-start').textContent = res.passed ? '▶ ממשיכים!' : '▶ מתאמנים עוד!';
+    $('btn-explain-cancel').classList.add('hidden');
     $('overlay-explain').classList.remove('hidden');
     setTimeout(() => Speech.speak(text), 350);
   }
@@ -562,6 +580,7 @@ function createEngine(config) {
     $('explain-name').textContent = `רמה ${levelId}: ${L.name}`;
     $('explain-text').textContent = L.explain;
     $('btn-explain-start').textContent = ctx === 'help' ? '▶ ממשיכים!' : '▶ מתחילים!';
+    $('btn-explain-cancel').classList.add('hidden');
 
     const demoBox = $('explain-demo');
     demoBox.innerHTML = '';
@@ -581,7 +600,7 @@ function createEngine(config) {
   }
 
   function replayExplain() {
-    if (explainCtx === 'test-intro') { Speech.speak(testIntroSpeech()); return; }
+    if (explainCtx === 'test-intro') { Speech.speak(introText); return; }
     if (explainCtx === 'test-result' && lastResult) { Speech.speak(config.testResult(lastResult)); return; }
     const levelId = explainCtx === 'help' && q ? q.levelId : S().maxLevel;
     Speech.speak(explainSpeechText(levelId));
@@ -601,7 +620,8 @@ function createEngine(config) {
     } else if (ctx === 'test-intro') {
       beginTest();
     } else if (ctx === 'test-result') {
-      if (lastResult && lastResult.passed) advanceLevel();
+      // רק מבחן ההתקדמות מעלה רמה. אחרי מבחן חוזר חוזרים לתרגול הרגיל
+      if (lastResult && lastResult.passed && !lastResult.retro) advanceLevel();
       else { updateTopbar(); nextQuestion(); }
     } else if (q) {
       Speech.speak(q.speech);
@@ -610,13 +630,22 @@ function createEngine(config) {
 
   /* ─── API ─── */
   return {
-    open() {
+    /* opts.testFor - להיכנס ישר למבחן חוזר של הבלוק שנסגר ברמה הזאת */
+    open(opts = {}) {
       test = null;
       updateTopbar();
       const st = S();
-      if (TEST_EVERY && st.pendingTest) showTestIntro();
+      if (TEST_EVERY && opts.testFor) showTestIntro(opts.testFor, true);
+      else if (TEST_EVERY && st.pendingTest) showTestIntro(st.maxLevel);
       else if (st.explainedUpTo < st.maxLevel) showExplain(st.maxLevel, 'intro');
       else nextQuestion();
+    },
+
+    /* האם אפשר לגשת עכשיו למבחן החוזר של הבלוק הזה (עברנו את הרמות, אין מדליה) */
+    testAvailable(blockEnd) {
+      const st = S();
+      return !!TEST_EVERY && blockEnd % TEST_EVERY === 0 &&
+        st.maxLevel > blockEnd && !(st.medals || []).includes(blockEnd);
     },
 
     stop() {
@@ -625,6 +654,7 @@ function createEngine(config) {
       clearTimeout(flyTimer);
       Speech.stop();
       test = null; // יציאה באמצע מבחן: המבחן יתחיל מחדש בכניסה הבאה (pendingTest נשמר)
+      pendingIntro = null;
       $('screen-game').classList.remove('test-mode');
     },
 
@@ -639,12 +669,23 @@ function createEngine(config) {
     replayExplain,
     closeExplain,
 
+    /* "לא עכשיו" בחלון של מבחן חוזר - סוגרים וחוזרים הביתה */
+    cancelExplain() {
+      $('overlay-explain').classList.add('hidden');
+      $('btn-explain-cancel').classList.add('hidden');
+      Speech.stop();
+      explainCtx = null;
+      pendingIntro = null;
+      App.goHome();
+    },
+
     applyLevelChange() {
       const st = S();
       st.stars = 0;
       st.explainedUpTo = st.maxLevel;
       st.pendingTest = false;
       test = null;
+      pendingIntro = null;
       recent = [];
       freshLeft = 0;
       App.save();
