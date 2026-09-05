@@ -65,7 +65,18 @@ function checkQuestion(L, q, i) {
 
   if (q.kind === 'build') {
     if (!q.build || !q.build.units.length) { err(`${tag}: build ריק`); return; }
-    if (q.build.tiles.slice().sort().join('|') !== q.build.units.slice().sort().join('|')) err(`${tag}: האריחים אינם תמורה של המילה`);
+    const given = q.build.given || [];
+    const n = q.build.units.length;
+    const blanks = q.build.units.map((_, i) => i).filter(i => !given.includes(i));
+    const need = blanks.map(i => q.build.units[i]).sort().join('|');
+    if (q.build.tiles.slice().sort().join('|') !== need) err(`${tag}: האריחים אינם בדיוק האותיות החסרות (${q.word.w})`);
+    if (given.some(i => !(i >= 0 && i < n)) || new Set(given).size !== given.length) err(`${tag}: אינדקסים נתונים לא תקינים ${given}`);
+    if (q.build.missing !== blanks.length || blanks.length < 1) err(`${tag}: missing=${q.build.missing} אבל יש ${blanks.length} משבצות ריקות`);
+    if (blanks.length === n ? !q.prompt.includes('בנה') : !q.prompt.includes('חסרות')) err(`${tag}: הטקסט לא מתאים להרכבה (${blanks.length}/${n}): ${q.prompt}`);
+    // כמה אותיות חסרות בכל רמת הרכבה
+    const K = { 19: 2, 25: 2, 26: 3 };
+    if (K[L.id] && q.build.missing !== K[L.id]) err(`${tag}: ברמה ${L.id} אמורות לחסור ${K[L.id]} אותיות, חסרות ${q.build.missing}`);
+    if ([20, 27].includes(L.id) && q.build.missing !== n) err(`${tag}: ברמה ${L.id} בונים את כל המילה`);
     if (q.build.units.join('') !== q.word.w) err(`${tag}: יחידות לא תואמות למילה`);
     if (q.word.xl) err(`${tag}: מילה לא מתאימה לבנייה (ארוכה מדי או וו/יי כפולות): ${q.word.w}`);
     return;
@@ -180,7 +191,7 @@ function checkQuestion(L, q, i) {
 }
 
 console.log(`בודק ${LEVELS.length} רמות אותיות, 400 תרגילים לכל רמה...`);
-if (LEVELS.length !== 25) err(`מספר רמות לא צפוי: ${LEVELS.length}`);
+if (LEVELS.length !== 30) err(`מספר רמות לא צפוי: ${LEVELS.length}`);
 const icons = new Set();
 LEVELS.forEach(L => { if (icons.has(L.icon)) err(`אייקון כפול באלבום: ${L.icon} (רמה ${L.id})`); icons.add(L.icon); });
 

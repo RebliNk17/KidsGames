@@ -50,8 +50,11 @@ const LettersGame = (() => {
     if (q.kind === 'build') {
       const slots = el('div', 'build-slots');
       slots.id = 'build-slots';
-      q.build.units.forEach(u => {
-        slots.appendChild(el('span', 'slot' + (reveal ? ' filled' : ''), reveal ? u : ''));
+      const given = q.build.given || [];
+      q.build.units.forEach((u, i) => {
+        // אותיות שניתנו מראש (הרכבה חלקית) מוצגות במקומן בצבע ניטרלי
+        const isGiven = given.includes(i);
+        slots.appendChild(el('span', 'slot' + (reveal ? ' filled' : isGiven ? ' given' : ''), reveal || isGiven ? u : ''));
       });
       exprEl.appendChild(slots);
     }
@@ -69,7 +72,7 @@ const LettersGame = (() => {
     }
     if (q.kind === 'build') {
       exprEl.querySelectorAll('.slot').forEach((s, i) => {
-        if (!s.classList.contains('filled')) {
+        if (!s.classList.contains('filled') && !s.classList.contains('given')) {
           s.textContent = q.build.units[i];
           s.classList.add('filled');
         }
@@ -77,51 +80,120 @@ const LettersGame = (() => {
     }
   }
 
-  /* ─── אינטראקציית בניית מילה ─── */
+  /* ─── אינטראקציית הרכבת מילה: לחיצה לפי הסדר, או גרירה למשבצת ─── */
+
+  /* גרירה עם האצבע: אחרי תזוזה קטנה האריח "מתרומם" (עותק צף עוקב אחרי האצבע),
+     המשבצת הריקה שמתחת מודגשת, ושחרור עליה מנסה להניח שם. שחרור במקום אחר פשוט
+     מחזיר את האריח, בלי עונש. לחיצה קצרה בלי תזוזה = הנחה במשבצת הריקה הבאה. */
+  const DRAG_PX = 10;
+
+  function attachTilePointer(tile, { api, onTap, onDrop }) {
+    let ghost = null, over = null, startX = 0, startY = 0, dragging = false;
+
+    const slotAt = (x, y) => {
+      const e = document.elementFromPoint(x, y);
+      return e && e.closest('#build-slots .slot');
+    };
+    const setOver = s => {
+      if (s === over) return;
+      if (over) over.classList.remove('over');
+      over = s && !s.classList.contains('filled') && !s.classList.contains('given') ? s : null;
+      if (over) over.classList.add('over');
+    };
+    const cleanup = () => {
+      if (ghost) ghost.remove();
+      ghost = null;
+      setOver(null);
+      tile.classList.remove('dragging');
+      dragging = false;
+    };
+
+    tile.addEventListener('pointerdown', ev => {
+      if (tile.classList.contains('used')) return;
+      if (api.isLocked()) { api.lockedFeedback(tile); return; }
+      ev.preventDefault();
+      tile.setPointerCapture(ev.pointerId);
+      startX = ev.clientX;
+      startY = ev.clientY;
+    });
+
+    tile.addEventListener('pointermove', ev => {
+      if (!tile.hasPointerCapture(ev.pointerId)) return;
+      if (!dragging) {
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < DRAG_PX) return;
+        dragging = true;
+        ghost = el('div', 'tile ghost', tile.dataset.unit);
+        document.body.appendChild(ghost);
+        tile.classList.add('dragging');
+      }
+      ghost.style.left = ev.clientX + 'px';
+      ghost.style.top = ev.clientY + 'px';
+      setOver(slotAt(ev.clientX, ev.clientY));
+    });
+
+    tile.addEventListener('pointerup', ev => {
+      if (!tile.hasPointerCapture(ev.pointerId)) return;
+      tile.releasePointerCapture(ev.pointerId);
+      const wasDrag = dragging;
+      const target = over;
+      cleanup();
+      if (!wasDrag) onTap();
+      else if (target) onDrop([...target.parentNode.children].indexOf(target));
+    });
+
+    tile.addEventListener('pointercancel', cleanup);
+  }
 
   function renderBuild(q, { optionsEl, exprEl }, api) {
-    let k = 0; // כמה אותיות כבר הונחו
-    let guideOn = false;
     const units = q.build.units;
+    const given = q.build.given || [];
+    const filled = new Set(given);   // אינדקסים שכבר יש בהם אות
+    let guideOn = false;
 
     optionsEl.innerHTML = '';
     optionsEl.style.gridTemplateColumns = `repeat(${q.build.tiles.length}, 1fr)`;
 
-    const slots = () => exprEl.querySelectorAll('.slot');
+    const slots = () => [...exprEl.querySelectorAll('.slot')];
+    const nextEmpty = () => units.findIndex((_, i) => !filled.has(i));
 
+    /* הדגשת הצעד הבא: האריח הנכון והמשבצת שמחכה לו */
     const highlightNext = () => {
       guideOn = true;
+      const k = nextEmpty();
       [...optionsEl.children].forEach(t => {
         t.classList.toggle('guide', !t.classList.contains('used') && t.dataset.unit === units[k]);
       });
+      slots().forEach((s, i) => s.classList.toggle('guide', i === k));
+    };
+
+    /* ניסיון להניח אריח במשבצת idx (לחיצה: המשבצת הריקה הבאה; גרירה: המשבצת שנבחרה) */
+    const place = (tile, idx) => {
+      const unit = tile.dataset.unit;
+      if (idx < 0 || filled.has(idx) || units[idx] !== unit) {
+        const attempts = api.miss(tile, { lockMs: 2000 });
+        // אחרי שלוש טעויות (ובמבחן - מיד) מדגישים את הצעד הבא
+        if (attempts >= 3 || api.isTest()) highlightNext();
+        return;
+      }
+      filled.add(idx);
+      const s = slots()[idx];
+      s.textContent = unit;
+      s.classList.add('filled');
+      s.classList.remove('guide');
+      tile.classList.add('used');
+      tile.classList.remove('guide');
+      api.stepSound(filled.size - given.length);
+      if (guideOn) highlightNext();
+      if (filled.size === units.length) {
+        Speech.speak(q.word.w + '!');
+        setTimeout(() => api.done(exprEl.querySelector('#build-slots')), 250);
+      }
     };
 
     q.build.tiles.forEach(unit => {
       const t = el('button', 'tile', unit);
       t.dataset.unit = unit;
-      t.addEventListener('click', () => {
-        if (t.classList.contains('used')) return;
-        if (api.isLocked()) { api.lockedFeedback(t); return; }
-
-        if (unit === units[k]) {
-          t.classList.add('used');
-          t.classList.remove('guide');
-          const s = slots()[k];
-          s.textContent = unit;
-          s.classList.add('filled');
-          api.stepSound(k + 1);
-          k++;
-          if (guideOn) highlightNext();
-          if (k === units.length) {
-            Speech.speak(q.word.w + '!');
-            setTimeout(() => api.done(exprEl.querySelector('#build-slots')), 250);
-          }
-        } else {
-          const attempts = api.miss(t, { lockMs: 2000 });
-          // אחרי שלוש טעויות (ובמבחן - מיד) מדגישים את האות הבאה
-          if (attempts >= 3 || api.isTest()) highlightNext();
-        }
-      });
+      attachTilePointer(t, { api, onTap: () => place(t, nextEmpty()), onDrop: idx => place(t, idx) });
       optionsEl.appendChild(t);
     });
   }
@@ -227,10 +299,11 @@ const LettersGame = (() => {
 
     if (spec.type === 'buildDemo') {
       const W = LL.wordOf(spec.word);
+      const given = spec.given || [];
       const btn = el('button', 'demo-card wide');
       btn.appendChild(el('div', 'word-side-emoji', W.e));
       const slots = el('div', 'build-slots');
-      W.u.forEach(u => slots.appendChild(el('span', 'slot filled', u)));
+      W.u.forEach((u, i) => slots.appendChild(el('span', given.includes(i) ? 'slot given' : 'slot filled', u)));
       btn.appendChild(slots);
       btn.addEventListener('click', () => { Sounds.click(); Speech.speak(W.w); });
       row.appendChild(btn);
