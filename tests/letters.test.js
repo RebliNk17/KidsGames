@@ -67,6 +67,7 @@ function checkQuestion(L, q, i) {
     if (!q.build || !q.build.units.length) { err(`${tag}: build ריק`); return; }
     if (q.build.tiles.slice().sort().join('|') !== q.build.units.slice().sort().join('|')) err(`${tag}: האריחים אינם תמורה של המילה`);
     if (q.build.units.join('') !== q.word.w) err(`${tag}: יחידות לא תואמות למילה`);
+    if (q.word.xl) err(`${tag}: מילה לא מתאימה לבנייה (ארוכה מדי או וו/יי כפולות): ${q.word.w}`);
     return;
   }
 
@@ -142,14 +143,34 @@ function checkQuestion(L, q, i) {
 
     case 'pickWord':
       if (q.answer !== q.word.w) err(`${tag}: התשובה אינה המילה הכתובה`);
+      if (q.word.xl) err(`${tag}: מילה לא מתאימה לקריאה: ${q.word.w}`);
       q.options.forEach(o => { if (!LL.wordOf(o)) err(`${tag}: מילה לא מוכרת "${o}"`); });
       break;
 
     case 'missing': {
       const expected = q.word.u[q.blankIdx];
+      const last = q.word.len - 1;
+      const FIN = FINALS.map(f => f.fin);
       if (q.answer !== expected) err(`${tag}: אות חסרה שגויה: ${q.answer} != ${expected} (${q.word.w})`);
       if (q.visual.blankIdx !== q.blankIdx) err(`${tag}: מיקום החור לא תואם`);
-      checkLetterOptions(tag, q, q.blankIdx === q.word.len - 1 ? END_CHARS : ALL_CHARS);
+      if (q.word.xl) err(`${tag}: מילה לא מתאימה להרכבה: ${q.word.w}`);
+      const cue = { final: 'סופית', first: 'בהתחלת', last: 'בסוף', middle: 'באמצע', any: 'במילה' }[q.where];
+      if (!cue || !q.prompt.includes(cue)) err(`${tag}: הטקסט לא מתאים למיקום החור (${q.where}): ${q.prompt}`);
+      if (q.where === 'final') {
+        if (q.blankIdx !== last || !FIN.includes(q.answer)) err(`${tag}: השלמת סופית - החור לא בסוף או האות לא סופית (${q.word.w})`);
+        q.options.forEach(o => { if (!FIN.includes(o)) err(`${tag}: מסיח "${o}" אינו אות סופית`); });
+      } else if (q.where === 'first') {
+        if (q.blankIdx !== 0) err(`${tag}: החור אמור להיות בהתחלה (${q.word.w})`);
+        checkLetterOptions(tag, q, ALL_CHARS);
+      } else if (q.where === 'last') {
+        if (q.blankIdx !== last) err(`${tag}: החור אמור להיות בסוף (${q.word.w})`);
+        checkLetterOptions(tag, q, END_CHARS);
+      } else if (q.where === 'middle') {
+        if (!(q.blankIdx > 0 && q.blankIdx < last)) err(`${tag}: החור אמור להיות באמצע (${q.word.w}, ${q.blankIdx})`);
+        checkLetterOptions(tag, q, ALL_CHARS);
+      } else {
+        checkLetterOptions(tag, q, q.blankIdx === last ? END_CHARS : ALL_CHARS);
+      }
       break;
     }
 
@@ -159,7 +180,9 @@ function checkQuestion(L, q, i) {
 }
 
 console.log(`בודק ${LEVELS.length} רמות אותיות, 400 תרגילים לכל רמה...`);
-if (LEVELS.length !== 20) err(`מספר רמות לא צפוי: ${LEVELS.length}`);
+if (LEVELS.length !== 25) err(`מספר רמות לא צפוי: ${LEVELS.length}`);
+const icons = new Set();
+LEVELS.forEach(L => { if (icons.has(L.icon)) err(`אייקון כפול באלבום: ${L.icon} (רמה ${L.id})`); icons.add(L.icon); });
 
 /* ─── בדיקות נתונים ─── */
 LETTERS.forEach(L => {
@@ -201,24 +224,29 @@ if (WORDS.length < 120) err(`מאגר המילים קטן מדי: ${WORDS.length
   if (counts.a !== 100 || counts.b !== 100 || counts.c !== 100) err(`החפיסה לא מאוזנת: ${JSON.stringify(counts)}`);
 }
 
-/* ─── הרמות ─── */
-const demoWords = spec => {
-  const specs = Array.isArray(spec) ? spec : [spec];
+/* ─── מילות הדוגמאות בחלונות ההסבר חייבות להתקיים במאגר ─── */
+function demoWords(spec) {
+  if (Array.isArray(spec)) return spec.flatMap(demoWords);
   const out = [];
-  specs.forEach(s => {
-    if (s.word) out.push(s.word);
-    if (s.words) out.push(...s.words);
-    if (s.items) s.items.forEach(it => out.push(it.word));
-  });
+  if (spec.word) out.push({ w: spec.word, idx: spec.idx });
+  if (spec.words) spec.words.forEach(w => out.push({ w }));
+  if (spec.items) spec.items.forEach(it => out.push({ w: it.word }));
   return out;
-};
+}
+LEVELS.forEach(L => {
+  demoWords(L.demoSpec).forEach(({ w, idx }) => {
+    const W = LL.wordOf(w);
+    if (!W) err(`רמה ${L.id}: מילת דוגמה "${w}" לא במאגר`);
+    else if (idx !== undefined && !(idx >= 0 && idx < W.len)) err(`רמה ${L.id}: אינדקס דוגמה ${idx} מחוץ למילה ${w}`);
+  });
+});
 
+/* ─── הרמות ─── */
 for (const L of LEVELS) {
   if (!L.name || !L.icon || !L.explain) err(`רמה ${L.id}: חסרים שם/אייקון/הסבר`);
   if (!L.demoSpec) err(`רמה ${L.id}: חסרה דוגמה להסבר`);
   if (NIKUD.test(L.name + L.explain)) err(`רמה ${L.id}: ניקוד בטקסט ההסבר`);
   if (/מחיאות|מחיאת/.test(L.name + L.explain)) err(`רמה ${L.id}: "מחיאות כף" במקום "הברות"`);
-  demoWords(L.demoSpec).forEach(w => { if (!LL.wordOf(w)) err(`רמה ${L.id}: מילת הדוגמה "${w}" לא במאגר`); });
 
   // אין שתי שאלות זהות ברצף, ויש מגוון
   const keys = [];

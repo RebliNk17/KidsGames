@@ -2,6 +2,7 @@
 
 const App = (() => {
   const STORAGE_KEY = 'kidsgames-progress-v1';
+  const LETTERS_CURRICULUM = 2; // גרסת תוכנית האותיות. עולה כשרמות משתנות - ראה migrate
   const $ = id => document.getElementById(id);
 
   const GAME_SLICE = () => ({
@@ -12,7 +13,8 @@ const App = (() => {
     answered: 0,
     firstTry: 0,
     medals: [],        // רמות שהמבחן אחריהן עבר (5, 10, ...) - מדליות באלבום
-    pendingTest: false // הגיע הזמן למבחן ועוד לא נעשה (נשמר גם אם יצאו באמצע)
+    pendingTest: false, // הגיע הזמן למבחן ועוד לא נעשה (נשמר גם אם יצאו באמצע)
+    curriculum: LETTERS_CURRICULUM // איזו תוכנית רמות השמירה הזאת מכירה
   });
 
   const DEFAULT_STATE = () => ({
@@ -53,6 +55,17 @@ const App = (() => {
     const st = Object.assign(DEFAULT_STATE(), raw);
     st.math = Object.assign(GAME_SLICE(), raw.math);
     st.letters = Object.assign(GAME_SLICE(), raw.letters);
+
+    // תוכנית האותיות השתנתה (הניקוד ירד, רמות 11 ומעלה חדשות, והרבה יותר תרגילים
+    // בכל רמה): שמירה מהתוכנית הישנה חוזרת לרמה 10 - האותיות, הצלילים וההברות
+    // שהילד באמת למד נשארים, ואת החומר החדש הוא פוגש עם ההסברים שלו.
+    // הכוכבים שנאספו והמדליות לא נוגעים בהם.
+    if (!(raw.letters && raw.letters.curriculum)) {
+      const L = st.letters;
+      if (L.maxLevel > 10) { L.maxLevel = 10; L.stars = 0; L.pendingTest = false; }
+      L.explainedUpTo = Math.min(L.explainedUpTo, L.maxLevel - 1); // ההסבר של הרמה הנוכחית יוצג שוב
+      L.curriculum = LETTERS_CURRICULUM;
+    }
     return st;
   }
 

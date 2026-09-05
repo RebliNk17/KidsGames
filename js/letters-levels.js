@@ -1,6 +1,8 @@
 /* ═══════════════ משחק האותיות והמילים - 20 רמות ═══════════════
  * מסלול לימוד לילד שעוד לא קורא, בלי ניקוד (כתיב מלא):
- *   הכרת אותיות (1-6) ← אות פותחת, אות סוגרת, סופיות והברות (7-14) ← קריאה ובנייה (15-20)
+ *   הכרת אותיות (1-6) ← אות פותחת, אות סוגרת, סופיות והברות (7-14)
+ *   ← הרכבת מילים בהדרגה: אות סופית, פותחת, סוגרת, באמצע, ואז בנייה (15-19)
+ *   ← קריאה, ואז מילים ארוכות (20-25)
  *   אחרי כל 5 רמות יש מבחן קטן על מה שנלמד (מנוהל במנוע, ראה engine.js).
  *
  * עקרונות חשובים:
@@ -133,7 +135,8 @@ const LettersLevels = (() => {
   /* w - המילה בכתיב מלא (בלי ניקוד), e - אמוג'י (ייחודי לכל מילה!),
      syl - מספר הברות (null = לא חד-משמעי, לא ישמש בתרגילי הברות),
      kw - מילת מפתח ללימוד האות הראשונה שלה (רמות 1-6).
-     מילים של 5 אותיות ומעלה משמשות רק לתרגילי צליל והברות, לא לקריאה ובנייה. */
+     מילים של 6 אותיות ומעלה, או עם וו/יי כפולות (כלל כתיב שאי אפשר לשמוע),
+     משמשות רק לתרגילי צליל, תמונות והברות - לא לקריאה ובנייה. */
   const W = (w, e, syl, kw) => ({ w, e, syl, kw: !!kw });
   const WORDS = [
     // ── שתי אותיות ──
@@ -172,7 +175,7 @@ const LettersLevels = (() => {
     W('סירה', '⛵', 2, 1), W('מסוק', '🚁', 2), W('רקטה', '🚀', 3, 1), W('ילדה', '👧', 2),
     W('לשון', '👅', 2), W('מחשב', '💻', 2), W('מלכה', '👸', 2), W('סבתא', '👵', 2),
     W('שוטר', '👮', 2), W('וופל', '🧇', 2, 1),
-    // ── מילים ארוכות (5+): רק לתרגילי צליל, תמונות והברות ──
+    // ── מילים ארוכות: 5 אותיות גם לקריאה ובנייה ברמות הגבוהות, 6+ רק לצליל, תמונות והברות ──
     W('טלפון', '📱', 3, 1), W('חולצה', '👕', 2, 1), W('אבטיח', '🍉', null, 1), W('גלידה', '🍦', null, 1),
     W('ברווז', '🦆', 2, 1), W('דבורה', '🐝', null, 1), W('היפופוטם', '🦛', null, 1), W('המבורגר', '🍔', 3, 1),
     W('טרקטור', '🚜', null, 1), W('לימון', '🍋', 2, 1), W('ציפור', '🐦', 2, 1), W('צפרדע', '🐸', null, 1),
@@ -192,7 +195,8 @@ const LettersLevels = (() => {
     w.len = w.u.length;
     w.first = w.u[0];
     w.last = w.u[w.len - 1];
-    w.xl = w.len >= 5;          // ארוכה: לא לקריאה ובנייה
+    w.dbl = /וו|יי/.test(w.w);  // וו/יי כפולות - כלל כתיב שאי אפשר לשמוע
+    w.xl = w.len >= 6 || w.dbl; // לא לקריאה ובנייה: רק לתרגילי צליל, תמונות והברות
   });
 
   const wordOf = str => WORDS.find(x => x.w === str) || null;
@@ -211,12 +215,16 @@ const LettersLevels = (() => {
     L.kws = startingWith(L.ch).filter(w => w.kw).sort((a, b) => a.len - b.len);
   });
 
-  const wordsByLen = n => WORDS.filter(w => w.len === n);
-  const LEN2 = wordsByLen(2), LEN3 = wordsByLen(3), LEN4 = wordsByLen(4);
+  /* מאגרי קריאה ובנייה לפי אורך (בלי מילים ארוכות מדי או עם אותיות כפולות) */
+  const wordsByLen = n => WORDS.filter(w => w.len === n && !w.xl);
+  const LEN2 = wordsByLen(2), LEN3 = wordsByLen(3), LEN4 = wordsByLen(4), LEN5 = wordsByLen(5);
   const LEN23 = [...LEN2, ...LEN3], LEN34 = [...LEN3, ...LEN4];
+  const LEN234 = [...LEN23, ...LEN4], LEN45 = [...LEN4, ...LEN5];
 
   const LAST_PLAIN = WORDS.filter(w => !finToReg[w.last]);   // נגמרות באות רגילה
   const LAST_FINAL = WORDS.filter(w => finToReg[w.last]);    // נגמרות באות סופית
+  const SHORT_FINAL = LAST_FINAL.filter(w => !w.xl && w.len <= 4); // קצרות שנגמרות בסופית - להשלמת אות סופית
+  const FINAL_GLYPHS = FINALS.map(f => f.fin);
 
   const SYL_WORDS = WORDS.filter(w => w.syl);
   const SYL_BY_N = { 1: SYL_WORDS.filter(w => w.syl === 1), 2: SYL_WORDS.filter(w => w.syl === 2), 3: SYL_WORDS.filter(w => w.syl === 3) };
@@ -466,18 +474,42 @@ const LettersLevels = (() => {
     };
   }
 
-  /* האות החסרה */
-  function qMissing(w) {
-    const idx = ri(0, w.len - 1);
+  /* האות החסרה. where - איפה החור:
+     'final'  - האות האחרונה, והיא אות סופית (המסיחים: שאר האותיות הסופיות)
+     'first'  - האות הראשונה     'last' - האחרונה (מסיחים בצורת סוף-מילה)
+     'middle' - אות באמצע        'any'  - בכל מקום */
+  const MISSING_PROMPT = {
+    final: 'איזו אות סופית חסרה בסוף המילה?',
+    first: 'איזו אות חסרה בהתחלת המילה?',
+    last: 'איזו אות חסרה בסוף המילה?',
+    middle: 'איזו אות חסרה באמצע המילה?',
+    any: 'איזו אות חסרה במילה?'
+  };
+
+  function qMissing(w, where = 'any') {
+    let idx;
+    if (where === 'first') idx = 0;
+    else if (where === 'last' || where === 'final') idx = w.len - 1;
+    else if (where === 'middle') idx = ri(1, w.len - 2);
+    else idx = ri(0, w.len - 1);
     const answer = w.u[idx];
     const atEnd = idx === w.len - 1;
-    const distract = distractorLetters(answer, 3, { pool: atEnd ? END_CHARS : ALL_CHARS, lookalikes: !atEnd });
+    const pool = where === 'final' ? FINAL_GLYPHS : atEnd ? END_CHARS : ALL_CHARS;
+    const distract = distractorLetters(answer, 3, { pool, lookalikes: !atEnd });
+    const speech = {
+      final: `המילה ${w.w} איבדה את האות האחרונה שלה - וזאת אות סופית! תגיד ${w.w} עד הסוף, ומצא את האות הסופית שחסרה.`,
+      first: `המילה ${w.w} איבדה את האות הראשונה! תגיד לאט ${w.w}. איזה צליל שומעים ראשון? מצא את האות שלו.`,
+      last: `המילה ${w.w} איבדה את האות האחרונה! תגיד ${w.w} עד הסוף. איזה צליל שומעים אחרון? מצא את האות שלו.`,
+      middle: `למילה ${w.w} חסרה אות באמצע! תגיד ${w.w} לאט, צליל אחרי צליל, ומצא איזה צליל נשאר בלי אות.`,
+      any: `אוי לא! המילה ${w.w} איבדה אות! תגיד לאט ${w.w}, ומצא איזו אות חסרה.`
+    }[where];
     return {
-      kind: 'pick', type: 'missing', key: `miss:${w.w}:${idx}`,
+      kind: 'pick', type: 'missing', where, key: `miss:${w.w}:${idx}`,
       optStyle: 'letter',
-      prompt: 'איזו אות חסרה במילה?',
-      speech: `אוי לא! המילה ${w.w} איבדה אות! תגיד לאט ${w.w}, ומצא איזו אות חסרה.`,
-      hint: `תגיד ${w.w} לאט, צליל צליל, והצבע על כל אות. איפה הצליל שאין לו אות?`,
+      prompt: MISSING_PROMPT[where],
+      speech,
+      hint: `תגיד ${w.w} לאט, צליל צליל, והצבע על כל אות. איפה הצליל שאין לו אות?` +
+        (atEnd && finToReg[answer] ? ' זכור: בסוף מילה יש אותיות עם צורה מיוחדת!' : ''),
       revealSpeech: `האות החסרה מהבהבת! לחץ עליה ונשלים את המילה ${w.w}.`,
       answer,
       options: shuffle([answer, ...distract]),
@@ -621,44 +653,77 @@ const LettersLevels = (() => {
       ])
     },
     {
-      id: 15, name: 'קוראים מילים!', icon: '📖',
-      explain: 'הרגע הכי גדול - אתה קורא מילה אמיתית! תסתכל על כל אות, תגיד את הצליל שלה, וחבר את הצלילים ביחד למילה אחת. ואז מצא את התמונה של המילה.',
-      demoSpec: { type: 'wordReveal', word: 'דג' },
-      gen: () => qReadWord(draw('L15', LEN2), 3, [2, 3])
+      id: 15, name: 'משלימים אות סופית', icon: '🧩',
+      explain: 'עכשיו מרכיבים מילים! רואים את המילה עם התמונה שלה, אבל האות האחרונה ברחה - וזאת אות סופית. תגיד את המילה עד הסוף, תקשיב לצליל האחרון, ומצא את האות הסופית שחסרה.',
+      demoSpec: { type: 'missingDemo', word: 'בלון', idx: 3 },
+      gen: () => qMissing(draw('L15', SHORT_FINAL), 'final')
     },
     {
-      id: 16, name: 'מילים ארוכות יותר', icon: '📚',
-      explain: 'עכשיו מילים עם שלוש אותיות! קרא לאט, צליל אחרי צליל, ואז חבר הכול למילה אחת.',
-      demoSpec: { type: 'wordReveal', word: 'ספר' },
-      gen: () => qReadWord(draw('L16', LEN3), 4, [2, 3, 4])
+      id: 16, name: 'משלימים אות פותחת', icon: '🚀',
+      explain: 'הפעם האות הראשונה של המילה חסרה. תגיד את המילה לאט, תקשיב לצליל הראשון, ושים במקום הריק את האות שלו.',
+      demoSpec: { type: 'missingDemo', word: 'כלב', idx: 0 },
+      gen: () => qMissing(draw('L16', LEN23), 'first')
     },
     {
-      id: 17, name: 'מהתמונה למילה', icon: '🖼️',
-      explain: 'הפוך על הפוך! רואים תמונה - ומחפשים את המילה הכתובה שלה. קרא את כל המילים לאט. זהירות: יש מילים דומות שמנסות לבלבל!',
-      demoSpec: { type: 'wordReveal', word: 'גמל' },
-      gen: () => qPickWord(draw('L17', LEN23), 3, [2, 3])
+      id: 17, name: 'משלימים אות סוגרת', icon: '🏁',
+      explain: 'עכשיו האות האחרונה חסרה. תגיד את המילה עד הסוף, ותמצא את האות של הצליל האחרון. זכור: בסוף מילה יש אותיות עם צורה מיוחדת!',
+      demoSpec: { type: 'missingDemo', word: 'ספר', idx: 2 },
+      gen: () => qMissing(draw('L17', LEN23), 'last')
     },
     {
-      id: 18, name: 'האות החסרה', icon: '🧩',
-      explain: 'אוי לא! המילים מאבדות אותיות! תגיד את המילה לאט, תקשיב איזה צליל מתחבא במקום הריק, ומצא את האות שברחה.',
+      id: 18, name: 'משלימים אות באמצע', icon: '🍩',
+      explain: 'הכי מאתגר: האות שחסרה מתחבאת באמצע המילה! תגיד את המילה לאט, צליל אחרי צליל, והצבע על כל אות. איפה הצליל שאין לו אות?',
       demoSpec: { type: 'missingDemo', word: 'כלב', idx: 1 },
-      gen: () => qMissing(draw('L18', LEN34))
+      gen: () => qMissing(draw('L18', LEN34), 'middle')
     },
     {
-      id: 19, name: 'בונים מילים', icon: '🧱',
-      explain: 'עכשיו אתה הבנאי! תשמע מילה, ובנה אותה בעצמך: לחץ על האותיות לפי הסדר, מהצליל הראשון ועד האחרון.',
+      id: 19, name: 'בונים מילים קצרות', icon: '🧱',
+      explain: 'עכשיו אתה הבנאי! תשמע מילה, ובנה אותה בעצמך מההתחלה: לחץ על האותיות לפי הסדר, מהצליל הראשון ועד האחרון.',
       demoSpec: { type: 'buildDemo', word: 'דג' },
       gen: () => qBuild(draw('L19', LEN23))
     },
     {
-      id: 20, name: 'אלוף המילים', icon: '🏆',
-      explain: 'האתגר האחרון! מילים גדולות של ארבע אותיות - לפעמים תקרא ותמצא תמונה, לפעמים תמצא אות חסרה, ולפעמים תבנה בעצמך. מי שמסיים - יודע לקרוא! אלוף אמיתי!',
-      demoSpec: { type: 'buildDemo', word: 'בלון' },
+      id: 20, name: 'קוראים מילים!', icon: '📖',
+      explain: 'הרגע הכי גדול - אתה קורא מילה אמיתית, בלי שאומרים לך אותה! תסתכל על כל אות, תגיד את הצליל שלה, וחבר את הצלילים ביחד למילה אחת. ואז מצא את התמונה של המילה.',
+      demoSpec: { type: 'wordReveal', word: 'דג' },
+      gen: () => qReadWord(draw('L20', LEN2), 3, [2, 3])
+    },
+    {
+      id: 21, name: 'קוראים מילים ארוכות', icon: '📚',
+      explain: 'עכשיו מילים עם שלוש וארבע אותיות! קרא לאט, צליל אחרי צליל, ואז חבר הכול למילה אחת.',
+      demoSpec: { type: 'wordReveal', word: 'כוכב' },
       gen: () => mix([
-        [7, () => qBuild(draw('L20a', LEN4))],
-        [5, () => qReadWord(draw('L20b', LEN4), 4, [3, 4])],
-        [4, () => qMissing(draw('L20c', LEN4))],
-        [4, () => qPickWord(draw('L20d', LEN4), 4, [3, 4])]
+        [3, () => qReadWord(draw('L21a', LEN3), 4, [2, 3, 4])],
+        [2, () => qReadWord(draw('L21b', LEN4), 4, [3, 4])]
+      ])
+    },
+    {
+      id: 22, name: 'מהתמונה למילה', icon: '🖼️',
+      explain: 'הפוך על הפוך! רואים תמונה - ומחפשים את המילה הכתובה שלה. קרא את כל המילים לאט. זהירות: יש מילים דומות שמנסות לבלבל!',
+      demoSpec: { type: 'wordReveal', word: 'גמל' },
+      gen: () => qPickWord(draw('L22', LEN234), 3, [2, 3, 4])
+    },
+    {
+      id: 23, name: 'אות חסרה במילה ארוכה', icon: '🧭',
+      explain: 'גם המילים הארוכות מאבדות אותיות - ובכל מקום! תגיד את המילה לאט, והצבע על כל אות עד שתמצא את החור.',
+      demoSpec: { type: 'missingDemo', word: 'חתול', idx: 2 },
+      gen: () => qMissing(draw('L23', LEN45), 'any')
+    },
+    {
+      id: 24, name: 'בונים מילים ארוכות', icon: '🏗️',
+      explain: 'בנאי מומחה! עכשיו בונים מילים של ארבע וחמש אותיות. תגיד את המילה לאט, ולחץ על האותיות לפי הסדר.',
+      demoSpec: { type: 'buildDemo', word: 'בלון' },
+      gen: () => qBuild(draw('L24', LEN45))
+    },
+    {
+      id: 25, name: 'אלוף המילים', icon: '🏆',
+      explain: 'האתגר האחרון! מילים גדולות - לפעמים תקרא ותמצא תמונה, לפעמים תמצא את המילה הכתובה, לפעמים אות חסרה, ולפעמים תבנה בעצמך. מי שמסיים - יודע לקרוא! אלוף אמיתי!',
+      demoSpec: { type: 'buildDemo', word: 'טלפון' },
+      gen: () => mix([
+        [7, () => qBuild(draw('L25a', LEN45))],
+        [5, () => qReadWord(draw('L25b', LEN45), 4, [3, 4, 5])],
+        [4, () => qMissing(draw('L25c', LEN45), 'any')],
+        [4, () => qPickWord(draw('L25d', LEN45), 4, [3, 4, 5])]
       ])
     }
   ];
