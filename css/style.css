@@ -1135,3 +1135,358 @@ button {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ═══════════════════ מסך בחירת ילד ═══════════════════ */
+.who-cards {
+  display: flex;
+  gap: 18px;
+  width: 100%;
+  margin-top: 34px;
+  justify-content: center;
+}
+
+.who-card {
+  flex: 1;
+  max-width: 250px;
+  min-height: 210px;
+  border-radius: 30px;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  box-shadow: 0 8px 0 rgba(60, 30, 120, 0.25), 0 12px 24px rgba(60, 30, 120, 0.2);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.who-card:active { transform: translateY(5px) scale(0.99); box-shadow: 0 3px 0 rgba(60,30,120,0.25); }
+.who-card.who-3 { background: linear-gradient(135deg, #6fcf5a, #0f9d8a); }
+.who-card.who-6 { background: linear-gradient(135deg, #7c4dff, #ff4d94); }
+
+.who-icon { font-size: 60px; filter: drop-shadow(0 3px 2px rgba(0,0,0,0.25)); animation: wiggle 2.4s ease-in-out infinite; }
+.who-age { font-size: clamp(56px, 16vw, 84px); font-weight: bold; line-height: 1; text-shadow: 0 3px 0 rgba(0,0,0,0.2); direction: ltr; }
+.who-label { font-size: 18px; opacity: 0.95; }
+
+.btn-switch {
+  margin-top: 10px;
+  background: #ffffffcc;
+  color: #5b3fa8;
+  font-size: 14px;
+  font-weight: bold;
+  padding: 7px 14px;
+  border-radius: 14px;
+  box-shadow: 0 3px 0 rgba(60, 30, 120, 0.2);
+}
+
+/* כל ילד רואה רק את המשחקים והמדבקות שלו */
+body[data-child="3"] .for-6, body[data-child="6"] .for-3 { display: none !important; }
+
+/* כפתורי הורים ומסך מלא צפים מעל מסך הבחירה ומסך הבית, ונעלמים בזמן משחק */
+.btn-gear, .btn-fs { position: fixed; z-index: 3; }
+body[data-screen="screen-game"] .btn-gear, body[data-screen="screen-game"] .btn-fs { display: none; }
+
+.game-card.thinking { background: linear-gradient(135deg, #6fcf5a, #0f9d8a); }
+.chip-thinking { background: linear-gradient(135deg, #6fcf5a, #0f9d8a); }
+.shelf-sec.thinking .stkr.earned { --ring: #c9f2c4; }
+
+/* ═══════════════════ משחק החשיבה ═══════════════════ */
+
+/* חפצים לספירה גדולים יותר לקטנים */
+#screen-game[data-game="thinking"] .obj { font-size: clamp(34px, 9.5vw, 50px); }
+
+/* רמז "תקשיב" - כשהשאלה כולה בקול */
+.vis-listen {
+  font-size: clamp(44px, 12vw, 60px);
+  line-height: 1.1;
+  opacity: 0.9;
+  animation: listenPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes listenPulse {
+  0%, 100% { transform: scale(1) rotate(-4deg); }
+  50%      { transform: scale(1.08) rotate(4deg); }
+}
+
+.vis-css { display: flex; justify-content: center; padding: 6px 0; }
+.vis-css .glass { width: 64px; height: 88px; }
+
+/* כפתורי תמונות גדולים */
+.opt.think-opt { padding: 14px 6px; }
+.opt.emoji-opt.think-opt { font-size: clamp(42px, 11vw, 60px); line-height: 1.15; }
+
+/* מי שונה: ארבע תמונות בשורה, אחת אולי הפוכה */
+.opt.cell-opt { font-size: clamp(32px, 8.6vw, 48px); padding: 14px 2px; }
+.flip { display: inline-block; transform: scaleX(-1); }
+
+/* צלליות */
+.vis-shadow { font-size: clamp(76px, 22vw, 110px); line-height: 1.1; }
+.silhouette { display: inline-block; filter: brightness(0); opacity: 0.9; transition: filter 0.6s, opacity 0.6s; }
+.silhouette.unmasked { filter: none; opacity: 1; animation: starFill 0.6s ease; }
+
+/* מספרים */
+.opt.num-opt { font-size: clamp(36px, 10vw, 52px); }
+
+/* כרטיסי כמות (איפה יש יותר) */
+.opt.qty-opt { padding: 12px 6px; min-height: 96px; display: flex; align-items: center; justify-content: center; }
+.qty {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 3px 6px;
+  font-size: clamp(20px, 5.6vw, 28px);
+  line-height: 1.2;
+  max-width: 6.6em;
+  direction: ltr;
+}
+
+/* סדרות */
+.pattern-row {
+  display: flex;
+  direction: rtl;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: nowrap;
+}
+
+.pattern-item {
+  width: clamp(40px, 11vw, 58px);
+  height: clamp(40px, 11vw, 58px);
+  display: grid;
+  place-items: center;
+  font-size: clamp(24px, 6.6vw, 36px);
+  line-height: 1;
+  background: #f3edff;
+  border: 3px solid #b9a4f2;
+  border-radius: 14px;
+  animation: objPop 0.4s ease backwards;
+}
+
+.pattern-row.long .pattern-item { width: clamp(33px, 9.4vw, 50px); height: clamp(33px, 9.4vw, 50px); font-size: clamp(20px, 5.6vw, 30px); border-width: 2px; border-radius: 11px; }
+.pattern-row.long { gap: 4px; }
+
+.pattern-item.missing {
+  background: #ffe9a8;
+  border-color: #ffb03a;
+  border-style: dashed;
+  color: #b8860b;
+  font-weight: bold;
+  animation: pulseSoft 1.4s ease-in-out infinite;
+}
+
+.pattern-item.revealed { background: #c8f7c5; border-color: #34c759; animation: starFill 0.6s ease; }
+
+.dot { display: inline-block; width: 0.9em; height: 0.9em; border-radius: 50%; box-shadow: inset 0 0 0 3px rgba(0, 0, 0, 0.12); vertical-align: middle; }
+.opt.pat-opt { padding: 14px 6px; font-size: clamp(34px, 9vw, 48px); line-height: 1.15; display: flex; justify-content: center; align-items: center; min-height: 84px; }
+
+/* הפכים: אמוג'י או כוס מלאה/ריקה */
+.opt.opp-opt { font-size: clamp(38px, 10vw, 54px); display: flex; justify-content: center; align-items: center; min-height: 96px; }
+
+.glass {
+  width: 44px;
+  height: 62px;
+  border: 3px solid #5b3fa8;
+  border-top-width: 2px;
+  border-radius: 5px 5px 14px 14px;
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+  box-sizing: border-box;
+  display: inline-block;
+}
+
+.glass::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(#7fbfff, #2f7cf6); height: 84%; }
+.glass.glass-empty::after { height: 9%; opacity: 0.5; }
+
+/* לפני ואחרי: מספר, חץ, וחור */
+.seq-arrow-ltr { font-size: clamp(24px, 7vw, 34px); font-weight: bold; color: #ff4d94; }
+.seq-box.revealed { background: #c8f7c5; border-color: #34c759; color: #1d7a33; animation: starFill 0.6s ease; }
+
+/* כמה מתחבאים: שורה של חפצים וקופסה שנסגרת */
+.hidden-scene {
+  display: flex;
+  direction: rtl;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.hs-out { max-width: 62%; }
+
+.hs-box {
+  position: relative;
+  min-width: 88px;
+  min-height: 72px;
+  padding: 6px;
+  background: #e2b07a;
+  border: 3px solid #a0672d;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 -10px 0 #c48a4f;
+}
+
+.hs-inner { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; font-size: 22px; max-width: 80px; visibility: hidden; }
+.hs-box.open .hs-inner { visibility: visible; animation: objPop 0.5s ease; }
+
+.hs-box .lid {
+  position: absolute;
+  inset: -3px;
+  border-radius: 10px;
+  background: linear-gradient(#d9a066, #b47a3c);
+  border: 3px solid #a0672d;
+  display: grid;
+  place-items: center;
+  font-size: 34px;
+  font-weight: bold;
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+.hs-box.closed .lid { opacity: 1; }
+.hs-box.closed.open .lid { opacity: 0; pointer-events: none; }
+
+.obj.to-box { animation: intoBox 0.9s ease forwards; pointer-events: none; }
+@keyframes intoBox {
+  to { transform: translate(-40px, 30px) scale(0.2); opacity: 0; }
+}
+
+/* חלוקה שווה */
+.share-scene { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.share-kids { display: flex; gap: 40px; font-size: clamp(40px, 11vw, 56px); line-height: 1.1; direction: rtl; }
+.share-piles { display: flex; gap: 22px; direction: rtl; justify-content: center; flex-wrap: wrap; }
+.pile { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.pile .share-kid { font-size: clamp(36px, 10vw, 50px); }
+.pile-items { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; font-size: clamp(20px, 5.5vw, 28px); max-width: 4.5em; background: #f3edff; border: 3px dashed #b9a4f2; border-radius: 14px; padding: 6px 8px; animation: objPop 0.5s ease; }
+
+/* זיכרון */
+.mem-progress { display: flex; gap: 8px; justify-content: center; direction: rtl; font-size: clamp(24px, 6.6vw, 34px); }
+.mem-slot {
+  width: 1.6em;
+  height: 1.6em;
+  border-radius: 12px;
+  background: #f3edff;
+  border: 3px dashed #b9a4f2;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  font-size: 0.8em;
+}
+.mem-slot.found { background: #c8f7c5; border: 3px solid #34c759; font-size: 1em; animation: starFill 0.5s ease; }
+
+.mem-card {
+  min-height: clamp(76px, 21vw, 110px);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #9d7bff, #6a3fe0);
+  color: #ffffffcc;
+  font-size: clamp(34px, 9.5vw, 50px);
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 6px 0 #4a27a8, 0 10px 18px rgba(60, 30, 120, 0.18);
+  transition: transform 0.12s, background 0.25s, box-shadow 0.12s;
+  animation: objPop 0.4s ease backwards;
+}
+
+.mem-card:active { transform: translateY(4px); box-shadow: 0 2px 0 #4a27a8; }
+.mem-card.open { background: linear-gradient(180deg, #ffffff, #f1eaff); box-shadow: 0 6px 0 #c9b8f0; color: #3b2b63; }
+.mem-card.open .mem-face { animation: objPop 0.3s ease; }
+.mem-card.matched { background: linear-gradient(180deg, #b6f7b0, #7ce87a); box-shadow: 0 6px 0 #52b95a; pointer-events: none; }
+.mem-card.wobble { animation: cardShake 0.35s ease; }
+
+/* מה נעלם */
+.vanish-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; direction: rtl; justify-items: center; }
+.vanish-grid.six { grid-template-columns: repeat(3, 1fr); }
+.vn-item {
+  width: clamp(58px, 16vw, 84px);
+  height: clamp(58px, 16vw, 84px);
+  display: grid;
+  place-items: center;
+  font-size: clamp(34px, 9.5vw, 50px);
+  line-height: 1;
+  background: #f3edff;
+  border: 3px solid #b9a4f2;
+  border-radius: 16px;
+  transition: transform 0.4s, background 0.4s;
+}
+.vn-item.gone { background: #ffe9a8; border-color: #ffb03a; border-style: dashed; animation: pulseSoft 1.4s ease-in-out infinite; }
+.vn-item.back { background: #c8f7c5; border-color: #34c759; animation: starFill 0.6s ease; }
+.vn-wait {
+  text-align: center;
+  font-size: 18px;
+  font-weight: bold;
+  color: #5b3fa8;
+  background: #ffffffd9;
+  border-radius: 18px;
+  padding: 16px;
+  animation: pulseSoft 1.4s ease-in-out infinite;
+}
+
+/* סידור לפי סדר (גודל / סיפור) */
+.seq-slots { display: flex; direction: rtl; justify-content: center; align-items: flex-end; gap: 6px; flex-wrap: wrap; }
+.seq-slot { min-width: 1.5em; min-height: 1.5em; font-size: clamp(30px, 8vw, 44px); line-height: 1.2; padding: 4px; }
+.seq-slot .sz-xs, .seq-slot .sz-s, .seq-slot .sz-m, .seq-slot .sz-l { line-height: 1; }
+.seq-arrow { font-size: clamp(22px, 6vw, 30px); font-weight: bold; color: #ff4d94; align-self: center; }
+.order-slots .seq-slot { min-width: 1.7em; min-height: 1.9em; display: flex; align-items: flex-end; justify-content: center; }
+.seq-tile { font-size: clamp(30px, 8vw, 44px); line-height: 1; display: flex; align-items: center; justify-content: center; min-height: clamp(80px, 22vw, 116px); padding: 8px 4px; }
+.seq-tile > span { line-height: 1; }
+
+.sz-xs { font-size: 0.5em; }
+.sz-s  { font-size: 0.7em; }
+.sz-m  { font-size: 1em; }
+.sz-l  { font-size: 1.45em; }
+
+/* סצנות מיקום: שולחן / קופסה, וחיה על / מתחת / ליד / בתוך */
+.opt.scene-opt { padding: 10px 4px; }
+.scene {
+  position: relative;
+  width: clamp(80px, 24vw, 112px);
+  height: clamp(80px, 24vw, 112px);
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.scene .actor {
+  position: absolute;
+  font-size: clamp(24px, 7vw, 32px);
+  line-height: 1;
+  left: 64%;
+  transform: translateX(-50%);
+}
+
+.prop-table { position: absolute; left: 34%; right: 6%; top: 48%; height: 9%; background: #b3762f; border-radius: 4px; box-shadow: inset 0 -3px 0 #8a5624; }
+.prop-table::before, .prop-table::after { content: ''; position: absolute; top: 100%; width: 10%; height: 420%; background: #8a5624; border-radius: 0 0 3px 3px; }
+.prop-table::before { left: 6%; }
+.prop-table::after { right: 6%; }
+
+.scene-table .actor.pos-on { bottom: 53%; }
+.scene-table .actor.pos-under { top: 60%; }
+.scene-table .actor.pos-next { left: 15%; bottom: 6%; }
+
+.box-back, .box-front { position: absolute; left: 34%; right: 6%; border-radius: 6px; }
+.box-back { bottom: 8%; height: 50%; background: #e2b07a; border: 3px solid #a0672d; }
+.box-front { bottom: 8%; height: 32%; background: #c48a4f; border: 3px solid #a0672d; z-index: 2; }
+.scene-box .actor.pos-in { bottom: 30%; z-index: 1; }
+.scene-box .actor.pos-on { bottom: 58%; }
+.scene-box .actor.pos-next { left: 15%; bottom: 6%; }
+
+/* דוגמאות בחלון ההסבר */
+.demo-card.demo-odd { border-color: #ffb03a; background: linear-gradient(180deg, #fff8e6, #ffe9a8); box-shadow: 0 4px 0 #e0b64f; }
+.demo-card.demo-scene { padding: 6px 8px; }
+.demo-card .demo-main { display: flex; align-items: center; gap: 6px; }
+.demo-plus { font-size: 0.6em; color: #ff4d94; }
+.demo-card .silhouette { font-size: 1em; }
+.demo-card .glass { width: 34px; height: 48px; }
+.demo-cards.align-end { align-items: flex-end; }
+.demo-card .pattern-row, .demo-card .seq-slots, .demo-card .seq-row { font-size: 16px; }
+.demo-card .seq-box { min-width: 38px; padding: 6px 4px; font-size: 20px; }
+.demo-card .hidden-scene .obj { font-size: 24px; pointer-events: none; }
+.demo-card .hs-box { min-width: 66px; min-height: 56px; }
+.demo-card .hs-inner { font-size: 18px; }
+.demo-card .pile .share-kid { font-size: 30px; }
+.demo-card .pile-items { font-size: 18px; }
+.demo-card .obj-grid { pointer-events: none; }

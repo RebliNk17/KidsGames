@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>משחקים ולומדים 🎈</title>
-  <meta name="description" content="משחקי למידה מהנים לילדים - חשבון, אותיות ומילים, עם צלילים והסברים קוליים">
+  <meta name="description" content="משחקי למידה מהנים לילדים - חשבון, אותיות ומילים ומשחק חשיבה לגיל הגן, עם צלילים והסברים קוליים">
   <meta name="theme-color" content="#7c4dff">
 
   <link rel="manifest" href="./manifest.webmanifest">
@@ -22,27 +22,52 @@
 
   <!-- ה-?v= מבטיח שה-HTML תמיד מקבל את הקבצים מאותה גרסה בדיוק
        (בלי ערבוב עם מטמון ישן). מעלים אותו יחד עם CACHE שב-sw.js. -->
-  <link rel="stylesheet" href="./css/style.css?v=8">
+  <link rel="stylesheet" href="./css/style.css?v=9">
 </head>
 <body>
 
   <!-- רקע מונפש -->
   <div id="bg-bubbles" aria-hidden="true"></div>
 
-  <!-- ══════════ מסך הבית ══════════ -->
-  <main id="screen-home" class="screen">
+  <!-- ══════════ מסך בחירת ילד ══════════ -->
+  <main id="screen-who" class="screen">
+    <header class="home-header">
+      <h1 class="home-title"><span class="wiggle">🎈</span> משחקים ולומדים <span class="wiggle d2">🎈</span></h1>
+      <p class="home-sub">מי משחק היום?</p>
+    </header>
+    <section class="who-cards">
+      <button id="who-3" class="who-card who-3">
+        <span class="who-icon">🧸</span>
+        <span class="who-age">3</span>
+        <span class="who-label">גיל 3</span>
+      </button>
+      <button id="who-6" class="who-card who-6">
+        <span class="who-icon">🎒</span>
+        <span class="who-age">6</span>
+        <span class="who-label">גיל 6</span>
+      </button>
+    </section>
+  </main>
+
+  <!-- ══════════ מסך הבית (המשחקים של הילד שנבחר) ══════════ -->
+  <main id="screen-home" class="screen hidden">
     <header class="home-header">
       <h1 class="home-title"><span class="wiggle">🎈</span> משחקים ולומדים <span class="wiggle d2">🎈</span></h1>
       <p class="home-sub">משחקים, צוברים כוכבים ולומדים דברים חדשים!</p>
+      <button id="btn-switch" class="btn-switch"><span id="switch-icon">🧸</span> <span id="switch-text">גיל 3</span> · החלפה</button>
     </header>
 
     <section class="shelf" aria-label="המדבקות שאספתי">
       <div class="shelf-title">🏆 אלבום המדבקות שלי</div>
-      <div class="shelf-sec math">
+      <div class="shelf-sec thinking for-3">
+        <span class="shelf-chip chip-thinking">חשיבה</span>
+        <div id="sticker-row-thinking" class="sticker-row"></div>
+      </div>
+      <div class="shelf-sec math for-6">
         <span class="shelf-chip chip-math">חשבון</span>
         <div id="sticker-row-math" class="sticker-row"></div>
       </div>
-      <div class="shelf-sec letters">
+      <div class="shelf-sec letters for-6">
         <span class="shelf-chip chip-letters">אותיות</span>
         <div id="sticker-row-letters" class="sticker-row"></div>
       </div>
@@ -50,14 +75,21 @@
     </section>
 
     <section class="cards">
-      <button id="card-math" class="game-card math">
+      <button id="card-thinking" class="game-card thinking for-3">
+        <span class="card-icon">🧠</span>
+        <span class="card-name">משחק החשיבה</span>
+        <span class="card-info" id="thinking-card-info">רמה 1</span>
+        <span class="card-go">▶ בוא נשחק!</span>
+      </button>
+
+      <button id="card-math" class="game-card math for-6">
         <span class="card-icon">🎲</span>
         <span class="card-name">משחק החשבון</span>
         <span class="card-info" id="math-card-info">רמה 1</span>
         <span class="card-go">▶ בוא נשחק!</span>
       </button>
 
-      <button id="card-words" class="game-card words">
+      <button id="card-words" class="game-card words for-6">
         <span class="card-icon">📚</span>
         <span class="card-name">אותיות ומילים</span>
         <span class="card-info" id="letters-card-info">רמה 1</span>
@@ -66,22 +98,23 @@
     </section>
 
     <button id="btn-install" class="btn-install hidden">📲 התקן כאפליקציה</button>
-
-    <button id="btn-settings" class="btn-gear" title="להורים - לחיצה ארוכה">
-      <span class="gear-fill"></span>⚙️
-    </button>
-
-    <button id="btn-fullscreen" class="btn-fs hidden" title="מסך מלא">
-      <svg id="fs-icon-expand" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M4 9 V4 H9"></path><path d="M15 4 H20 V9"></path>
-        <path d="M20 15 V20 H15"></path><path d="M9 20 H4 V15"></path>
-      </svg>
-      <svg id="fs-icon-compress" class="hidden" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M9 4 V9 H4"></path><path d="M15 4 V9 H20"></path>
-        <path d="M15 20 V15 H20"></path><path d="M9 20 V15 H4"></path>
-      </svg>
-    </button>
   </main>
+
+  <!-- כפתורי הורים ומסך מלא - צפים מעל מסך הבחירה ומסך הבית (מוסתרים בזמן משחק) -->
+  <button id="btn-settings" class="btn-gear" title="להורים - לחיצה ארוכה">
+    <span class="gear-fill"></span>⚙️
+  </button>
+
+  <button id="btn-fullscreen" class="btn-fs hidden" title="מסך מלא">
+    <svg id="fs-icon-expand" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 9 V4 H9"></path><path d="M15 4 H20 V9"></path>
+      <path d="M20 15 V20 H15"></path><path d="M9 20 H4 V15"></path>
+    </svg>
+    <svg id="fs-icon-compress" class="hidden" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 4 V9 H4"></path><path d="M15 4 V9 H20"></path>
+      <path d="M15 20 V15 H20"></path><path d="M9 20 V15 H4"></path>
+    </svg>
+  </button>
 
   <!-- ══════════ מסך המשחק ══════════ -->
   <main id="screen-game" class="screen hidden">
@@ -148,7 +181,15 @@
         <button id="set-test-voice" class="btn">שמע דוגמה</button>
       </div>
       <div class="set-row">
-        <span>🧮 רמה בחשבון</span>
+        <span>🧠 רמה בחשיבה (גיל 3)</span>
+        <div class="level-adjust">
+          <button id="set-lvl3-down" class="btn small">−</button>
+          <span id="set-lvl3-val">1</span>
+          <button id="set-lvl3-up" class="btn small">+</button>
+        </div>
+      </div>
+      <div class="set-row">
+        <span>🧮 רמה בחשבון (גיל 6)</span>
         <div class="level-adjust">
           <button id="set-lvl-down" class="btn small">−</button>
           <span id="set-lvl-val">1</span>
@@ -156,7 +197,7 @@
         </div>
       </div>
       <div class="set-row">
-        <span>🔤 רמה באותיות</span>
+        <span>🔤 רמה באותיות (גיל 6)</span>
         <div class="level-adjust">
           <button id="set-lvl2-down" class="btn small">−</button>
           <span id="set-lvl2-val">1</span>
@@ -184,14 +225,16 @@
     </div>
   </div>
 
-  <script src="./js/sounds.js?v=8"></script>
-  <script src="./js/speech.js?v=8"></script>
-  <script src="./js/confetti.js?v=8"></script>
-  <script src="./js/levels.js?v=8"></script>
-  <script src="./js/letters-levels.js?v=8"></script>
-  <script src="./js/engine.js?v=8"></script>
-  <script src="./js/game.js?v=8"></script>
-  <script src="./js/letters-game.js?v=8"></script>
-  <script src="./js/app.js?v=8"></script>
+  <script src="./js/sounds.js?v=9"></script>
+  <script src="./js/speech.js?v=9"></script>
+  <script src="./js/confetti.js?v=9"></script>
+  <script src="./js/levels.js?v=9"></script>
+  <script src="./js/letters-levels.js?v=9"></script>
+  <script src="./js/thinking-levels.js?v=9"></script>
+  <script src="./js/engine.js?v=9"></script>
+  <script src="./js/game.js?v=9"></script>
+  <script src="./js/letters-game.js?v=9"></script>
+  <script src="./js/thinking-game.js?v=9"></script>
+  <script src="./js/app.js?v=9"></script>
 </body>
 </html>

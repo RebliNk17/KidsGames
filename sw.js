@@ -1,13 +1,13 @@
 /* Service Worker - מאפשר עבודה גם בלי אינטרנט והתקנה כאפליקציה.
  *
  * בכל עדכון של האתר מעלים את המספר בשני מקומות יחד:
- *   1. CACHE כאן (v8 ← v9)
+ *   1. CACHE כאן (v9 ← v10)
  *   2. ה-?v= שבקישורי ה-JS/CSS ב-index.html
  * ככה ה-HTML תמיד טוען קבצים מאותה גרסה בדיוק, וגם דפדפן עם מטמון ישן
  * לא יערבב קוד ישן עם HTML חדש (זה בדיוק מה שתקע את המסך פעם אחת). */
 
-const CACHE = 'kidsgames-v8';
-const V = '?v=8';
+const CACHE = 'kidsgames-v9';
+const V = '?v=9';
 
 const ASSETS = [
   './',
@@ -18,9 +18,11 @@ const ASSETS = [
   './js/confetti.js' + V,
   './js/levels.js' + V,
   './js/letters-levels.js' + V,
+  './js/thinking-levels.js' + V,
   './js/engine.js' + V,
   './js/game.js' + V,
   './js/letters-game.js' + V,
+  './js/thinking-game.js' + V,
   './js/app.js' + V,
   './manifest.webmanifest',
   './icons/favicon.svg',

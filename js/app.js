@@ -23,10 +23,19 @@ const App = (() => {
     speechOn: true,
     fullscreenOn: false,
     math: GAME_SLICE(),
-    letters: GAME_SLICE()
+    letters: GAME_SLICE(),
+    thinking: GAME_SLICE()
   });
 
+  /* שני ילדים: הקטן (3) משחק במשחק החשיבה, הגדול (6) בחשבון ובאותיות.
+     בוחרים ילד במסך הראשון; ההתקדמות של כל משחק נשמרת בנפרד ממילא. */
+  const CHILDREN = {
+    3: { icon: '🧸', label: 'גיל 3', games: ['thinking'] },
+    6: { icon: '🎒', label: 'גיל 6', games: ['math', 'letters'] }
+  };
+
   let state = load();
+  let child = null;          // 3 או 6 - הילד שנבחר במסך הראשון
   let deferredInstall = null;
   let activeEngine = null;
 
@@ -48,13 +57,15 @@ const App = (() => {
           answered: raw.answered || 0,
           firstTry: raw.firstTry || 0
         },
-        letters: GAME_SLICE()
+        letters: GAME_SLICE(),
+        thinking: GAME_SLICE()
       };
     }
     // השלמת שדות חסרים בעתיד
     const st = Object.assign(DEFAULT_STATE(), raw);
     st.math = Object.assign(GAME_SLICE(), raw.math);
     st.letters = Object.assign(GAME_SLICE(), raw.letters);
+    st.thinking = Object.assign(GAME_SLICE(), raw.thinking);
 
     // תוכנית האותיות השתנתה (הניקוד ירד, רמות 11 ומעלה חדשות, והרבה יותר תרגילים
     // בכל רמה): שמירה מהתוכנית הישנה חוזרת לרמה 10 - האותיות, הצלילים וההברות
@@ -86,13 +97,27 @@ const App = (() => {
   /* ─── מסכים ─── */
 
   function show(screenId) {
-    ['screen-home', 'screen-game'].forEach(id => $(id).classList.add('hidden'));
+    ['screen-who', 'screen-home', 'screen-game'].forEach(id => $(id).classList.add('hidden'));
     $(screenId).classList.remove('hidden');
+    document.body.dataset.screen = screenId;
   }
 
   function goHome() {
     if (activeEngine) activeEngine.stop();
     activeEngine = null;
+    if (!child) { show('screen-who'); return; }
+    show('screen-home');
+    refreshHome();
+  }
+
+  /* בחירת ילד: מסך הבית מציג רק את המשחקים והמדבקות שלו */
+  function chooseChild(age) {
+    child = age;
+    document.body.dataset.child = String(age);
+    $('switch-icon').textContent = CHILDREN[age].icon;
+    $('switch-text').textContent = CHILDREN[age].label;
+    Sounds.ensure();
+    Sounds.click();
     show('screen-home');
     refreshHome();
   }
@@ -103,7 +128,8 @@ const App = (() => {
     // הלחיצה על הכרטיס היא מחוות משתמש - מותר לבקש כאן מסך מלא
     if (state.fullscreenOn && fsSupported() && !fsElement()) enterFullscreen();
     activeEngine = engine;
-    $('mascot').textContent = engine.key === 'letters' ? '🦉' : '🦊';
+    $('mascot').textContent = { letters: '🦉', thinking: '🐻' }[engine.key] || '🦊';
+    $('screen-game').dataset.game = engine.key;
     show('screen-game');
     engine.open(opts);
   }
@@ -250,17 +276,22 @@ const App = (() => {
   function refreshHome() {
     // מוקשח: תקלה קוסמטית כאן לא תפיל את שאר האפליקציה
     try {
-      const ML = Levels.LEVELS, LL = LettersLevels.LEVELS;
+      const ML = Levels.LEVELS, LL = LettersLevels.LEVELS, TL = ThinkingLevels.LEVELS;
 
       $('math-card-info').textContent =
         `רמה ${state.math.maxLevel} מתוך ${ML.length} · ${ML[state.math.maxLevel - 1].name}`;
       $('letters-card-info').textContent =
         `רמה ${state.letters.maxLevel} מתוך ${LL.length} · ${LL[state.letters.maxLevel - 1].name}`;
+      $('thinking-card-info').textContent =
+        `רמה ${state.thinking.maxLevel} מתוך ${TL.length} · ${TL[state.thinking.maxLevel - 1].name}`;
 
       stickerRowFor(ML, state.math, $('sticker-row-math'), MathGame);
       stickerRowFor(LL, state.letters, $('sticker-row-letters'), LettersGame);
+      stickerRowFor(TL, state.thinking, $('sticker-row-thinking'), ThinkingGame);
 
-      const total = state.math.totalStars + state.letters.totalStars;
+      // סך הכוכבים של המשחקים של הילד שנבחר
+      const games = (CHILDREN[child] || { games: ['math', 'letters', 'thinking'] }).games;
+      const total = games.reduce((sum, g) => sum + state[g].totalStars, 0);
       $('total-stars').textContent = total > 0 ? `אספת ${total} ⭐ עד עכשיו!` : 'שחק ואסוף מדבקות וכוכבים! ✨';
     } catch (e) { /* מסך הבית תמיד חייב להישאר לחיץ */ }
   }
@@ -269,7 +300,7 @@ const App = (() => {
 
   function makeBubbles() {
     const box = $('bg-bubbles');
-    const icons = ['⭐', '🎈', '☁️', '✨', '🔢', '➕', '💜', '🌈', 'א', 'ב'];
+    const icons = ['⭐', '🎈', '☁️', '✨', '🔢', '➕', '💜', '🌈', 'א', 'ב', '🧩', '🐻'];
     for (let i = 0; i < 14; i++) {
       const b = document.createElement('span');
       b.className = 'bubble';
@@ -332,9 +363,10 @@ const App = (() => {
 
     $('set-lvl-val').textContent = String(state.math.maxLevel);
     $('set-lvl2-val').textContent = String(state.letters.maxLevel);
+    $('set-lvl3-val').textContent = String(state.thinking.maxLevel);
 
-    const tAns = state.math.answered + state.letters.answered;
-    const tFirst = state.math.firstTry + state.letters.firstTry;
+    const tAns = state.math.answered + state.letters.answered + state.thinking.answered;
+    const tFirst = state.math.firstTry + state.letters.firstTry + state.thinking.firstTry;
     const acc = tAns ? Math.round(100 * tFirst / tAns) : 0;
     $('set-stats').textContent =
       `ענה על ${tAns} תרגילים · ${tFirst} נכונים בניסיון ראשון (${acc}%)`;
@@ -388,6 +420,7 @@ const App = (() => {
 
     levelAdjuster('set-lvl-down', 'set-lvl-up', () => state.math, () => MathGame, Levels.LEVELS.length);
     levelAdjuster('set-lvl2-down', 'set-lvl2-up', () => state.letters, () => LettersGame, LettersLevels.LEVELS.length);
+    levelAdjuster('set-lvl3-down', 'set-lvl3-up', () => state.thinking, () => ThinkingGame, ThinkingLevels.LEVELS.length);
 
     $('set-reset').addEventListener('click', () => {
       $('overlay-confirm').classList.remove('hidden');
@@ -436,6 +469,10 @@ const App = (() => {
   function init() {
     // קודם כל מחווטים את הכפתורים החיוניים - שום שגיאה בהמשך האתחול
     // לא תשאיר מסך שאי אפשר ללחוץ עליו (לקח מתקלת גרסאות אמיתית!)
+    $('who-3').addEventListener('click', () => chooseChild(3));
+    $('who-6').addEventListener('click', () => chooseChild(6));
+    $('btn-switch').addEventListener('click', () => { Sounds.click(); child = null; show('screen-who'); });
+    $('card-thinking').addEventListener('click', () => openGame(ThinkingGame));
     $('card-math').addEventListener('click', () => openGame(MathGame));
     $('card-words').addEventListener('click', () => openGame(LettersGame));
     $('btn-back').addEventListener('click', () => { Sounds.click(); goHome(); });
@@ -453,6 +490,7 @@ const App = (() => {
     });
 
     try { makeBubbles(); } catch (e) { }
+    show('screen-who');
     refreshHome();
     setupParentGate();
     setupSettings();
@@ -473,6 +511,8 @@ const App = (() => {
   return {
     get state() { return state; },
     get activeEngine() { return activeEngine; },
+    get child() { return child; },
+    chooseChild,
     save,
     refreshHome,
     goHome
@@ -484,6 +524,8 @@ window.__KG = {
   App,
   get Game() { return MathGame; },
   get LettersGame() { return LettersGame; },
+  get ThinkingGame() { return ThinkingGame; },
   Levels,
-  get LettersLevels() { return LettersLevels; }
+  get LettersLevels() { return LettersLevels; },
+  get ThinkingLevels() { return ThinkingLevels; }
 };
